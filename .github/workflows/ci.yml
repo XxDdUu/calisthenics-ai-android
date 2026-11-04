@@ -1,0 +1,77 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    name: Test & Build Android App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Gradle Cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant Execute Permission to Gradle Wrapper
+        run: chmod +x gradlew
+
+      - name: Run Android Unit Tests
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Archive Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: calisthenics-ai-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Build Release APK (Verification)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
+            ./gradlew assembleRelease --no-daemon \
+              -PANDROID_KEYSTORE_PATH=release.keystore \
+              -PANDROID_KEYSTORE_PASSWORD="$KEYSTORE_PASSWORD" \
+              -PANDROID_KEY_ALIAS="$KEY_ALIAS" \
+              -PANDROID_KEY_PASSWORD="$KEY_PASSWORD"
+            rm -f app/release.keystore
+          else
+            ./gradlew assembleRelease --no-daemon
+          fi
+
+      - name: Archive Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: calisthenics-ai-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
+          retention-days: 7
