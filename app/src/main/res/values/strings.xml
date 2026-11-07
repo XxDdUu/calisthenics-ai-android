@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">SKY</string>
+    <string name="end_relationship">End Relationship</string>
+    <string name="end_relationship_dialog_title">End Coach–Client Relationship?</string>
+    <string name="end_relationship_dialog_message">Are you sure you want to end this coaching relationship? The connection will be removed, and both users will need to establish a new relationship to work together again.</string>
+    <string name="cancel">Cancel</string>
+</resources>

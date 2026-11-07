@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Main Ascending Sky Delta (Muted Sky Blue) -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M54,26 L76,58 L65,58 L54,42 L43,58 L32,58 Z" />
+    <!-- Zenith Summit Needle (Crisp White Accent) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,28 L57.5,39 L54,44 L50.5,39 Z" />
+    <!-- Atmospheric Horizon Cloud Strata (Soft Sky Blue) -->
+    <path
+        android:fillColor="#7DD3FC"
+        android:pathData="M34,65 C41,62 47.5,61 54,61 C60.5,61 67,62 74,65 C66.5,67.5 60.5,67.5 54,67.5 C47.5,67.5 41.5,67.5 34,65 Z" />
+    <!-- Base Horizon Foundation Strata (Mist Sky Blue) -->
+    <path
+        android:fillColor="#BAE6FD"
+        android:fillAlpha="0.85"
+        android:pathData="M40,72 C45,70.5 49.5,70 54,70 C58.5,70 63,70.5 68,72 C63.5,73.8 58.5,73.8 54,73.8 C49.5,73.8 44.5,73.8 40,72 Z" />
+</vector>

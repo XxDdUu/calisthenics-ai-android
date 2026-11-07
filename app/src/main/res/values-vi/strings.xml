@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">SKY</string>
+    <string name="end_relationship">Hủy quan hệ</string>
+    <string name="end_relationship_dialog_title">Hủy quan hệ Huấn luyện viên – Học viên?</string>
+    <string name="end_relationship_dialog_message">Bạn có chắc chắn muốn kết thúc mối quan hệ huấn luyện này? Kết nối sẽ bị hủy và cả hai người dùng sẽ cần thiết lập một mối quan hệ mới để tiếp tục làm việc cùng nhau.</string>
+    <string name="cancel">Hủy</string>
+</resources>

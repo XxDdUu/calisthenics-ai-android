@@ -1,0 +1,178 @@
+name: Release Android App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+concurrency:
+  group: release-android-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Publish Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Gradle Cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant Execute Permission to Gradle Wrapper
+        run: chmod +x gradlew
+
+      - name: Run Android Unit Tests
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Prepare Keystore for Signing
+        id: keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
+            echo "has_keystore=true" >> $GITHUB_OUTPUT
+            echo "Keystore successfully decoded."
+          else
+            echo "has_keystore=false" >> $GITHUB_OUTPUT
+            echo "::warning::ANDROID_KEYSTORE_BASE64 secret is not configured. An unsigned APK will be produced."
+          fi
+
+      - name: Build Release APK
+        env:
+          HAS_KEYSTORE: ${{ steps.keystore.outputs.has_keystore }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ "$HAS_KEYSTORE" = "true" ]; then
+            ./gradlew assembleRelease --no-daemon \
+              -PANDROID_KEYSTORE_PATH=release.keystore \
+              -PANDROID_KEYSTORE_PASSWORD="$KEYSTORE_PASSWORD" \
+              -PANDROID_KEY_ALIAS="$KEY_ALIAS" \
+              -PANDROID_KEY_PASSWORD="$KEY_PASSWORD"
+          else
+            ./gradlew assembleRelease --no-daemon
+          fi
+
+      - name: Clean Up Keystore
+        if: always()
+        run: rm -f app/release.keystore
+
+      - name: Package Release Artifacts
+        id: package
+        run: |
+          TAG_NAME="${{ github.ref_name }}"
+          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" = "master" ] || [ "$TAG_NAME" = "main" ]; then
+            TAG_NAME="${{ github.event.inputs.tag_name }}"
+          fi
+          if [ -z "$TAG_NAME" ]; then
+            TAG_NAME="v1.0"
+          fi
+
+          OUTPUT_DIR="app/build/outputs/apk/release"
+          if [ -f "$OUTPUT_DIR/app-release.apk" ]; then
+            APK_SRC="$OUTPUT_DIR/app-release.apk"
+            IS_SIGNED="true"
+          elif [ -f "$OUTPUT_DIR/app-release-unsigned.apk" ]; then
+            APK_SRC="$OUTPUT_DIR/app-release-unsigned.apk"
+            IS_SIGNED="false"
+          else
+            echo "Error: No release APK found in $OUTPUT_DIR"
+            exit 1
+          fi
+
+          DIST_APK="calisthenics-ai-${TAG_NAME}.apk"
+          cp "$APK_SRC" "$DIST_APK"
+
+          CHECKSUM=$(sha256sum "$DIST_APK" | awk '{print $1}')
+          echo "$CHECKSUM  $DIST_APK" > "${DIST_APK}.sha256"
+
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "apk_file=$DIST_APK" >> $GITHUB_OUTPUT
+          echo "checksum=$CHECKSUM" >> $GITHUB_OUTPUT
+          echo "is_signed=$IS_SIGNED" >> $GITHUB_OUTPUT
+
+          echo "Generated $DIST_APK (Signed: $IS_SIGNED, SHA-256: $CHECKSUM)"
+
+      - name: Generate Release Notes
+        run: |
+          TAG_NAME="${{ steps.package.outputs.tag_name }}"
+          CHECKSUM="${{ steps.package.outputs.checksum }}"
+          IS_SIGNED="${{ steps.package.outputs.is_signed }}"
+          DIST_APK="${{ steps.package.outputs.apk_file }}"
+
+          cat << 'EOF' > RELEASE_NOTES.md
+          ## Calisthenics AI - Phiên bản ${{ steps.package.outputs.tag_name }}
+
+          ### 📦 Thông tin bản phát hành
+          - **Tệp cài đặt:** `${{ steps.package.outputs.apk_file }}`
+          - **Application ID:** `com.calisthenics.ai`
+          - **Trạng thái chữ ký:** ${{ steps.package.outputs.is_signed == 'true' && '✅ Đã ký (Release Signed APK)' || '⚠️ Chưa ký (Unsigned APK - Cần cấu hình signing secret)' }}
+          - **SHA-256 Checksum:**
+          ```text
+          ${{ steps.package.outputs.checksum }}
+          ```
+
+          ---
+
+          ### 🚀 Tính năng nổi bật
+          - **AI Analysis & Progression Tracking:** Phân tích kỹ thuật hít xà, chống đẩy, muscle-up và đề xuất giáo án thông minh.
+          - **Apple-inspired Floating Navigation Bar:** Thanh điều hướng nổi trong suốt hiệu ứng kính mờ (frosted glass) tối ưu trải nghiệm tràn viền edge-to-edge.
+          - **Hold & Countdown Timer:** Bộ đếm giây static hold linh hoạt với âm thanh và rung phản hồi haptic.
+          - **Personal Records (PR) Tracking:** Theo dõi kỷ lục cá nhân chi tiết theo trọng lượng (Weighted), số lần (Reps) và thời gian giữ (Hold).
+          - **Google Sign-In & JWT Session Security:** Tích hợp Credential Manager xác thực Google an toàn với cơ chế bảo vệ phiên đăng nhập tự động.
+
+          ---
+
+          ### 📱 Hướng dẫn cài đặt APK trên thiết bị Android
+          1. Tải tệp `${{ steps.package.outputs.apk_file }}` về điện thoại.
+          2. (Tùy chọn) Kiểm tra tính toàn vẹn tệp bằng mã băm SHA-256 đính kèm.
+          3. Mở tệp APK trên thiết bị. Nếu được hỏi, chọn **Cài đặt ứng dụng từ nguồn không xác định** (Allow from this source) trong cài đặt bảo mật của trình duyệt hoặc trình quản lý tệp.
+          4. Tiến hành cài đặt và mở ứng dụng để bắt đầu tập luyện!
+
+          > **Lưu ý bảo mật:** Ứng dụng tuân thủ nghiêm ngặt các tiêu chuẩn bảo mật của Android (không yêu cầu quyền SMS/Contacts/Accessibility nhạy cảm, mã hóa dữ liệu cục bộ an toàn qua AndroidKeyStore).
+          EOF
+
+      - name: Archive Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.apk_file }}
+          path: |
+            ${{ steps.package.outputs.apk_file }}
+            ${{ steps.package.outputs.apk_file }}.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.package.outputs.tag_name }}
+          name: Calisthenics AI ${{ steps.package.outputs.tag_name }}
+          body_path: RELEASE_NOTES.md
+          files: |
+            ${{ steps.package.outputs.apk_file }}
+            ${{ steps.package.outputs.apk_file }}.sha256
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
