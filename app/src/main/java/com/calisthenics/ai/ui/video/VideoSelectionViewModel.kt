@@ -7,9 +7,11 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.calisthenics.ai.domain.model.AnalysisResult
+import com.calisthenics.ai.domain.repository.AnalysisRepository
 import com.calisthenics.ai.domain.usecase.AnalyzeImageUseCase
 import com.calisthenics.ai.domain.usecase.AnalyzeVideoUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,7 +38,8 @@ data class VideoSelectionUiState(
 class VideoSelectionViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val analyzeVideoUseCase: AnalyzeVideoUseCase,
-    private val analyzeImageUseCase: AnalyzeImageUseCase
+    private val analyzeImageUseCase: AnalyzeImageUseCase,
+    private val analysisRepository: AnalysisRepository
 ) : ViewModel() {
     private val exerciseId = savedStateHandle.get<String>("exerciseId")?.toLongOrNull() ?: 0L
     private val progressionName = java.net.URLDecoder.decode(savedStateHandle.get<String>("progressionName") ?: "", "UTF-8")
@@ -57,12 +60,46 @@ class VideoSelectionViewModel @Inject constructor(
                 _uiState.update { it.copy(isUploading = false, uploadStage = "", error = error.localizedMessage ?: "Could not read selected media") }
                 return@launch
             }
-            _uiState.update { it.copy(uploadStage = "Analyzing pose biomechanics & form score...") }
-            val result = if (_uiState.value.mediaType == "IMAGE") analyzeImageUseCase(cacheFile, exerciseId.takeIf { it > 0 }) else analyzeVideoUseCase(cacheFile, exerciseId.takeIf { it > 0 })
+            _uiState.update { it.copy(uploadStage = "Uploading to server for AI video scoring...") }
+            val result = if (_uiState.value.mediaType == "IMAGE") {
+                analyzeImageUseCase(cacheFile, exerciseId.takeIf { it > 0 })
+            } else {
+                analyzeVideoUseCase(cacheFile, exerciseId.takeIf { it > 0 })
+            }
             cacheFile.delete()
-            result.onSuccess { analysis ->
-                _uiState.update { it.copy(isUploading = false, uploadStage = "", analysisResult = analysis) }
-                onAnalysisSuccess(analysis.id)
+
+            result.onSuccess { initialAnalysis ->
+                if (_uiState.value.mediaType == "VIDEO" && (initialAnalysis.status == "PROCESSING" || initialAnalysis.status == "PENDING")) {
+                    _uiState.update { it.copy(uploadStage = "AI Pose estimation & skeleton rendering...") }
+                    var current = initialAnalysis
+                    var attempts = 0
+                    val maxAttempts = 45 // 45 * 2s = 90s
+                    while ((current.status == "PROCESSING" || current.status == "PENDING") && attempts < maxAttempts) {
+                        delay(2000)
+                        attempts++
+                        val pollResult = analysisRepository.getVideoAnalysisById(initialAnalysis.id)
+                        if (pollResult.isSuccess) {
+                            current = pollResult.getOrThrow()
+                            _uiState.update {
+                                it.copy(uploadStage = "Analyzing pose biomechanics (${attempts * 2}s)...")
+                            }
+                        }
+                    }
+
+                    if (current.status == "FAILED" || current.status == "NO_PERSON_DETECTED" || current.status == "INSUFFICIENT_POSE_QUALITY") {
+                        val errMsg = current.formFeedbackList.firstOrNull()
+                            ?: current.status?.replace('_', ' ')?.lowercase()?.replaceFirstChar { c -> c.uppercase() }
+                            ?: "AI Analysis could not evaluate video"
+                        _uiState.update { it.copy(isUploading = false, uploadStage = "", error = errMsg) }
+                        return@launch
+                    }
+
+                    _uiState.update { it.copy(isUploading = false, uploadStage = "", analysisResult = current) }
+                    onAnalysisSuccess(current.id)
+                } else {
+                    _uiState.update { it.copy(isUploading = false, uploadStage = "", analysisResult = initialAnalysis) }
+                    onAnalysisSuccess(initialAnalysis.id)
+                }
             }.onFailure { error ->
                 _uiState.update { it.copy(isUploading = false, uploadStage = "", error = error.localizedMessage ?: "Analysis failed. Please try again.") }
             }

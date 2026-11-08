@@ -12,6 +12,6 @@ class AnalyzeVideoUseCase @Inject constructor(
         videoFile: File,
         exerciseId: Long?
     ): Result<AnalysisResult> {
-        return repository.analyzeVideo(videoFile, exerciseId)
+        return repository.uploadVideoForAnalysis(videoFile, exerciseId)
     }
 }
