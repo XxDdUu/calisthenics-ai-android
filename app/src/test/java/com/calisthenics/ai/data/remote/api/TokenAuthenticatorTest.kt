@@ -212,11 +212,29 @@ class TokenAuthenticatorTest {
         val loginResponse = create401Response(url = "http://localhost:8080/api/v1/auth/login")
         val registerResponse = create401Response(url = "http://localhost:8080/api/v1/auth/register")
         val refreshResponse = create401Response(url = "http://localhost:8080/api/v1/auth/refresh")
+        val firebaseResponse = create401Response(url = "http://localhost:8080/api/v1/auth/firebase")
+        val googleResponse = create401Response(url = "http://localhost:8080/api/v1/auth/google")
 
         assertNull(authenticator.authenticate(null, loginResponse))
         assertNull(authenticator.authenticate(null, registerResponse))
         assertNull(authenticator.authenticate(null, refreshResponse))
+        assertNull(authenticator.authenticate(null, firebaseResponse))
+        assertNull(authenticator.authenticate(null, googleResponse))
         verify(exactly = 0) { authenticator.performRefresh(any()) }
+    }
+
+    @Test
+    fun `unauthenticated 401 without request token or refresh token does not emit session expired`() = runTest {
+        every { tokenManager.getRefreshToken() } returns null
+
+        sessionManager.sessionExpiredEvent.test {
+            val response = create401Response(authorizationHeader = null)
+            val retryRequest = authenticator.authenticate(null, response)
+
+            assertNull(retryRequest)
+            verify(exactly = 0) { tokenManager.clear() }
+            expectNoEvents()
+        }
     }
 
     @Test

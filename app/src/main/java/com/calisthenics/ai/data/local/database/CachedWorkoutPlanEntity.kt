@@ -1,11 +1,18 @@
 package com.calisthenics.ai.data.local.database
 
 import androidx.room.Entity
-import androidx.room.PrimaryKey
+import androidx.room.Index
 
-@Entity(tableName = "cached_workout_plans")
+@Entity(
+    tableName = "cached_workout_plans",
+    primaryKeys = ["ownerUserId", "id"],
+    indices = [
+        Index(value = ["ownerUserId"]),
+        Index(value = ["ownerUserId", "isActive"])
+    ]
+)
 data class CachedWorkoutPlanEntity(
-    @PrimaryKey
+    val ownerUserId: Long,
     val id: Long,
     val name: String,
     val splitType: String,
@@ -15,4 +22,3 @@ data class CachedWorkoutPlanEntity(
     val isActive: Boolean = false,
     val updatedAt: Long = System.currentTimeMillis()
 )
-

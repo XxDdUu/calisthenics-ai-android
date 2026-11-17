@@ -66,6 +66,7 @@ class PersonalRecordsViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         coEvery { analyticsRepository.getPrHistory(any(), any()) } returns Result.success(emptyList())
+        coEvery { analyticsRepository.getClientSharedPRs() } returns Result.success(emptyList())
     }
 
     @After
@@ -211,20 +212,26 @@ class PersonalRecordsViewModelTest {
     }
 
     @Test
-    fun sharesPrWithCoach() = runTest {
+    fun sharesPrWithSelectedRecipientAndClosesModal() = runTest {
         coEvery { exerciseRepository.getExercises() } returns Result.success(emptyList())
         coEvery { analyticsRepository.getUserPersonalRecords() } returns Result.success(listOf(pr1))
         coEvery { analyticsRepository.getPrHistory(any()) } returns Result.success(emptyList())
-        coEvery { analyticsRepository.sharePersonalRecord(101L) } returns Result.success(SharedPersonalRecordDto(id = 55L))
+        coEvery {
+            analyticsRepository.sharePersonalRecord(101L, 20L, any())
+        } returns Result.success(SharedPersonalRecordDto(id = 55L, coachUserId = 20L, coachName = "Coach Sarah"))
 
         val viewModel = PersonalRecordsViewModel(analyticsRepository, exerciseRepository)
         advanceUntilIdle()
 
-        viewModel.shareWithCoach(101L)
+        viewModel.openShareSheet(pr1)
+        assertEquals(pr1, viewModel.uiState.value.sharingPr)
+
+        viewModel.shareWithCoach(101L, recipientId = 20L, clientMessageId = "test-msg-id")
         advanceUntilIdle()
 
-        coVerify { analyticsRepository.sharePersonalRecord(101L) }
-        assertEquals("PR shared with your coach!", viewModel.uiState.value.successMessage)
+        coVerify { analyticsRepository.sharePersonalRecord(101L, 20L, "test-msg-id") }
+        assertNull(viewModel.uiState.value.sharingPr)
+        assertTrue(viewModel.uiState.value.successMessage.orEmpty().contains("Coach Sarah"))
     }
 }
 

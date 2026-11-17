@@ -7,19 +7,29 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-open class WorkoutTimerPreferences @Inject constructor(@ApplicationContext context: Context) {
+open class WorkoutTimerPreferences @Inject constructor(
+    @ApplicationContext context: Context,
+    private val tokenManager: TokenManager
+) {
     private val preferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+
+    private fun userPrefix(): String {
+        val userId = tokenManager.currentSessionSnapshot().activeUserId?.takeIf { it > 0L }
+            ?: tokenManager.getUserId()?.takeIf { it > 0L }
+        return if (userId != null) "user_${userId}_" else ""
+    }
 
     open fun getTimerConfig(exerciseName: String, fallbackRestSeconds: Int? = null): ExerciseTimerConfig {
         val key = normalizeKey(exerciseName)
+        val prefix = userPrefix()
         val defaultRest = fallbackRestSeconds?.takeIf { it > 0 } ?: 90
 
-        val countdownEnabled = preferences.getBoolean(KEY_COUNTDOWN_ENABLED_PREFIX + key, true)
-        val countdownDuration = preferences.getInt(KEY_COUNTDOWN_DURATION_PREFIX + key, 3)
-        val restEnabled = preferences.getBoolean(KEY_REST_ENABLED_PREFIX + key, true)
-        val restDuration = preferences.getInt(KEY_REST_DURATION_PREFIX + key, defaultRest)
-        val soundEnabled = preferences.getBoolean(KEY_SOUND_ENABLED, true)
-        val vibrationEnabled = preferences.getBoolean(KEY_VIBRATION_ENABLED, true)
+        val countdownEnabled = preferences.getBoolean(prefix + KEY_COUNTDOWN_ENABLED_PREFIX + key, true)
+        val countdownDuration = preferences.getInt(prefix + KEY_COUNTDOWN_DURATION_PREFIX + key, 3)
+        val restEnabled = preferences.getBoolean(prefix + KEY_REST_ENABLED_PREFIX + key, true)
+        val restDuration = preferences.getInt(prefix + KEY_REST_DURATION_PREFIX + key, defaultRest)
+        val soundEnabled = preferences.getBoolean(prefix + KEY_SOUND_ENABLED, true)
+        val vibrationEnabled = preferences.getBoolean(prefix + KEY_VIBRATION_ENABLED, true)
 
         return ExerciseTimerConfig(
             countdownEnabled = countdownEnabled,
@@ -33,13 +43,14 @@ open class WorkoutTimerPreferences @Inject constructor(@ApplicationContext conte
 
     open fun saveTimerConfig(exerciseName: String, config: ExerciseTimerConfig) {
         val key = normalizeKey(exerciseName)
+        val prefix = userPrefix()
         preferences.edit()
-            .putBoolean(KEY_COUNTDOWN_ENABLED_PREFIX + key, config.countdownEnabled)
-            .putInt(KEY_COUNTDOWN_DURATION_PREFIX + key, config.countdownDurationSeconds)
-            .putBoolean(KEY_REST_ENABLED_PREFIX + key, config.restTimerEnabled)
-            .putInt(KEY_REST_DURATION_PREFIX + key, config.restDurationSeconds)
-            .putBoolean(KEY_SOUND_ENABLED, config.soundEnabled)
-            .putBoolean(KEY_VIBRATION_ENABLED, config.vibrationEnabled)
+            .putBoolean(prefix + KEY_COUNTDOWN_ENABLED_PREFIX + key, config.countdownEnabled)
+            .putInt(prefix + KEY_COUNTDOWN_DURATION_PREFIX + key, config.countdownDurationSeconds)
+            .putBoolean(prefix + KEY_REST_ENABLED_PREFIX + key, config.restTimerEnabled)
+            .putInt(prefix + KEY_REST_DURATION_PREFIX + key, config.restDurationSeconds)
+            .putBoolean(prefix + KEY_SOUND_ENABLED, config.soundEnabled)
+            .putBoolean(prefix + KEY_VIBRATION_ENABLED, config.vibrationEnabled)
             .apply()
     }
 

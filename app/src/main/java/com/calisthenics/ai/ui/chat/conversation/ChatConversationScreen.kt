@@ -1,5 +1,8 @@
 package com.calisthenics.ai.ui.chat.conversation
 
+import com.calisthenics.ai.R
+
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -8,15 +11,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -26,13 +32,21 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,42 +64,57 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.calisthenics.ai.ui.report.ReportUserSheet
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.calisthenics.ai.data.remote.dto.SharedPersonalRecordDto
 import com.calisthenics.ai.domain.model.ChatMessage
 import com.calisthenics.ai.domain.model.MessageDeliveryStatus
 import com.calisthenics.ai.ui.chat.ChatTimeUtils
 import com.calisthenics.ai.ui.chat.PresenceIndicator
+import com.calisthenics.ai.ui.chat.components.ChatInputBar
+import com.calisthenics.ai.ui.chat.components.ChatLayout
 import com.calisthenics.ai.ui.components.EmptyState
 import com.calisthenics.ai.ui.components.ErrorView
 import com.calisthenics.ai.ui.components.LoadingView
+import com.calisthenics.ai.ui.components.PillBadge
 import com.calisthenics.ai.ui.theme.Accent
 import com.calisthenics.ai.ui.theme.Border
 import com.calisthenics.ai.ui.theme.Elevated
 import com.calisthenics.ai.ui.theme.Ink
 import com.calisthenics.ai.ui.theme.PrimaryText
 import com.calisthenics.ai.ui.theme.SecondaryText
+import com.calisthenics.ai.ui.theme.Warning
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatConversationScreen(
     onBackClick: () -> Unit,
+    onSharedPrClick: (SharedPersonalRecordDto) -> Unit = {},
     viewModel: ChatConversationViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val density = LocalDensity.current
+    val imeBottomPx = WindowInsets.ime.getBottom(density)
+    val isImeVisible = imeBottomPx > 0
 
     // Detect when user scrolls near the top to load older messages
     val shouldLoadOlder by remember {
@@ -109,6 +138,13 @@ fun ChatConversationScreen(
         }
     }
 
+    // Keep latest messages visible when the software keyboard opens
+    LaunchedEffect(isImeVisible) {
+        if (isImeVisible && state.messages.isNotEmpty()) {
+            listState.animateScrollToItem(state.messages.size - 1)
+        }
+    }
+
     // Show error snackbar if error occurs during send
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { errorMsg ->
@@ -117,7 +153,18 @@ fun ChatConversationScreen(
         }
     }
 
-    Scaffold(
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showReportSheet by remember { mutableStateOf(false) }
+
+    if (showReportSheet && state.otherUserId > 0L) {
+        ReportUserSheet(
+            userId = state.otherUserId,
+            userName = state.otherUserName.ifBlank { "User" },
+            onDismiss = { showReportSheet = false }
+        )
+    }
+
+    ChatLayout(
         topBar = {
             TopAppBar(
                 title = {
@@ -132,7 +179,7 @@ fun ChatConversationScreen(
                             if (!state.otherUserAvatarUrl.isNullOrBlank()) {
                                 AsyncImage(
                                     model = state.otherUserAvatarUrl,
-                                    contentDescription = "Avatar",
+                                    contentDescription = stringResource(R.string.loc_avatar),
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop
                                 )
@@ -167,9 +214,40 @@ fun ChatConversationScreen(
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.common_back),
                             tint = PrimaryText
                         )
+                    }
+                },
+                actions = {
+                    if (state.otherUserId > 0L) {
+                        Box {
+                            IconButton(onClick = { menuExpanded = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = stringResource(R.string.more_options),
+                                    tint = SecondaryText
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false },
+                                modifier = Modifier.background(Elevated)
+                            ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            stringResource(R.string.report_user),
+                                            color = PrimaryText
+                                        )
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        showReportSheet = true
+                                    }
+                                )
+                            }
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -178,29 +256,22 @@ fun ChatConversationScreen(
                 )
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = Ink
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .imePadding()
-        ) {
+        snackbarHostState = snackbarHostState,
+        containerColor = Ink,
+        messageContent = {
             // Message List Area
             Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
+                    .fillMaxSize()
             ) {
                 when {
                     state.isLoading -> {
-                        LoadingView(message = "Loading messages...")
+                        LoadingView(message = stringResource(R.string.loading_messages))
                     }
                     state.messages.isEmpty() -> {
                         EmptyState(
-                            title = "No messages yet",
-                            body = "Send a greeting to begin your conversation with ${state.otherUserName}."
+                            title = stringResource(R.string.no_messages),
+                            body = stringResource(R.string.greeting_message, state.otherUserName)
                         )
                     }
                     else -> {
@@ -241,14 +312,16 @@ fun ChatConversationScreen(
 
                                 MessageBubbleItem(
                                     message = message,
-                                    onRetryMessage = viewModel::retryMessage
+                                    onRetryMessage = viewModel::retryMessage,
+                                    onSharedPrClick = onSharedPrClick
                                 )
                             }
                         }
                     }
                 }
             }
-
+        },
+        inputBar = {
             // Message Composer at bottom
             MessageComposer(
                 text = state.inputText,
@@ -257,7 +330,7 @@ fun ChatConversationScreen(
                 isSending = state.isSending
             )
         }
-    }
+    )
 }
 
 private fun shouldShowDateHeader(previousMessage: ChatMessage?, currentMessage: ChatMessage): Boolean {
@@ -292,10 +365,24 @@ fun DateHeader(dateText: String) {
 @Composable
 fun MessageBubbleItem(
     message: ChatMessage,
-    onRetryMessage: (String) -> Unit
+    onRetryMessage: (String) -> Unit,
+    onSharedPrClick: (SharedPersonalRecordDto) -> Unit = {}
 ) {
     val isFromMe = message.isFromCurrentUser
     val isFailed = isFromMe && message.deliveryStatus == MessageDeliveryStatus.FAILED
+    val sharedPr = message.sharedPr
+
+    if (message.messageType.equals("PR_SHARE", ignoreCase = true) || sharedPr != null) {
+        PrShareMessageCard(
+            message = message,
+            sharedPr = sharedPr,
+            isFromMe = isFromMe,
+            isFailed = isFailed,
+            onRetryMessage = onRetryMessage,
+            onCardClick = { sharedPr?.let(onSharedPrClick) }
+        )
+        return
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -355,7 +442,7 @@ fun MessageBubbleItem(
                             MessageDeliveryStatus.SENT -> {
                                 Icon(
                                     imageVector = Icons.Default.Check,
-                                    contentDescription = "Sent",
+                                    contentDescription = stringResource(R.string.loc_sent),
                                     tint = Ink.copy(alpha = 0.7f),
                                     modifier = Modifier.size(11.dp)
                                 )
@@ -363,7 +450,7 @@ fun MessageBubbleItem(
                             MessageDeliveryStatus.FAILED -> {
                                 Icon(
                                     imageVector = Icons.Default.Warning,
-                                    contentDescription = "Failed to send",
+                                    contentDescription = stringResource(R.string.loc_failed_to_send),
                                     tint = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(12.dp)
                                 )
@@ -383,13 +470,292 @@ fun MessageBubbleItem(
             ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
-                    contentDescription = "Retry sending",
+                    contentDescription = stringResource(R.string.loc_retry_sending),
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(12.dp)
                 )
                 Spacer(Modifier.width(3.dp))
                 Text(
-                    text = "Failed to send. Tap to retry",
+                    text = stringResource(R.string.failed_send_retry),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 10.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PrShareMessageCard(
+    message: ChatMessage,
+    sharedPr: SharedPersonalRecordDto?,
+    isFromMe: Boolean,
+    isFailed: Boolean,
+    onRetryMessage: (String) -> Unit,
+    onCardClick: () -> Unit
+) {
+    val pr = sharedPr?.personalRecord
+    val exerciseName = pr?.exerciseName?.takeIf { it.isNotBlank() } ?: "Personal Record"
+    val achievementValue = pr?.displayFormattedValue?.takeIf { it.isNotBlank() } ?: message.content
+    val prTypeLabel = pr?.recordType
+        ?.replace("MAX_", "")
+        ?.replace('_', ' ')
+        ?.takeIf { it.isNotBlank() }
+        ?: "PR"
+    val achievedDate = pr?.achievedAt?.take(10)?.takeIf { it.isNotBlank() }
+    val previousFormatted = pr?.formattedPrevious?.takeIf { it.isNotBlank() }
+        ?: pr?.previousRecordValue?.let { prev ->
+            val num = if (prev % 1.0 == 0.0) "${prev.toLong()}" else "$prev"
+            val unit = pr.unit.orEmpty()
+            if (unit.isNotBlank()) "$num $unit" else num
+        }
+    val improvementPct = pr?.improvementPercentage?.takeIf { it > 0.0 }
+    val notes = pr?.notes?.takeIf { it.isNotBlank() }
+    val coachFeedback = sharedPr?.coachFeedback?.takeIf { it.isNotBlank() }
+    val rating = sharedPr?.rating?.takeIf { it > 0 }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start
+    ) {
+        Card(
+            modifier = Modifier
+                .widthIn(min = 240.dp, max = 320.dp)
+                .clickable(enabled = sharedPr != null, onClick = onCardClick),
+            shape = RoundedCornerShape(
+                topStart = 18.dp,
+                topEnd = 18.dp,
+                bottomStart = if (isFromMe) 18.dp else 4.dp,
+                bottomEnd = if (isFromMe) 4.dp else 18.dp
+            ),
+            colors = CardDefaults.cardColors(containerColor = Elevated),
+            border = BorderStroke(
+                width = 1.dp,
+                color = if (isFailed) MaterialTheme.colorScheme.error else Accent.copy(alpha = 0.5f)
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Header Badge Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(26.dp)
+                                .clip(CircleShape)
+                                .background(Warning.copy(alpha = 0.18f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.EmojiEvents,
+                                contentDescription = null,
+                                tint = Warning,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Text(
+                            text = "PERSONAL RECORD",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Warning,
+                            letterSpacing = 0.6.sp
+                        )
+                    }
+                    PillBadge(text = prTypeLabel, isAccent = true)
+                }
+
+                // Exercise Name
+                Text(
+                    text = exerciseName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = PrimaryText,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                // Achievement Value + Improvement
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = achievementValue,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Accent
+                    )
+                    if (improvementPct != null) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Accent.copy(alpha = 0.16f)
+                        ) {
+                            Text(
+                                text = "+$improvementPct%",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Accent,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Metadata: Previous value & Achieved date
+                if (!previousFormatted.isNullOrBlank() || !achievedDate.isNullOrBlank()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (!previousFormatted.isNullOrBlank()) {
+                            Text(
+                                text = "Prev: $previousFormatted",
+                                fontSize = 11.sp,
+                                color = SecondaryText
+                            )
+                        }
+                        if (!achievedDate.isNullOrBlank()) {
+                            Text(
+                                text = achievedDate,
+                                fontSize = 11.sp,
+                                color = SecondaryText
+                            )
+                        }
+                    }
+                }
+
+                // Optional PR Notes
+                if (!notes.isNullOrBlank()) {
+                    Text(
+                        text = notes,
+                        fontSize = 12.sp,
+                        color = PrimaryText.copy(alpha = 0.88f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Ink, RoundedCornerShape(8.dp))
+                            .padding(8.dp)
+                    )
+                }
+
+                // Coach feedback preview if reviewed
+                if (!coachFeedback.isNullOrBlank() || rating != null) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Ink, RoundedCornerShape(8.dp))
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Coach Feedback",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Accent
+                            )
+                            if (rating != null) {
+                                Text(
+                                    text = "★".repeat(rating),
+                                    fontSize = 11.sp,
+                                    color = Warning
+                                )
+                            }
+                        }
+                        if (!coachFeedback.isNullOrBlank()) {
+                            Text(
+                                text = "\"$coachFeedback\"",
+                                fontSize = 11.sp,
+                                color = PrimaryText,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = Border.copy(alpha = 0.5f))
+
+                // Footer: View PR Details + Message Time
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = "Tap to view PR details",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Accent
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = Accent,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = ChatTimeUtils.formatMessageTime(message.createdAt),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 10.sp,
+                            color = SecondaryText
+                        )
+                        if (isFromMe) {
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = stringResource(R.string.loc_sent),
+                                tint = Accent,
+                                modifier = Modifier.size(11.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        if (isFailed && message.clientMessageId != null) {
+            Row(
+                modifier = Modifier
+                    .padding(top = 2.dp, end = 4.dp)
+                    .clickable { onRetryMessage(message.clientMessageId) },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = stringResource(R.string.loc_retry_sending),
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(Modifier.width(3.dp))
+                Text(
+                    text = stringResource(R.string.failed_send_retry),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
                     fontSize = 10.sp
@@ -406,75 +772,16 @@ fun MessageComposer(
     onSend: () -> Unit,
     isSending: Boolean
 ) {
-    Surface(
-        color = com.calisthenics.ai.ui.theme.Surface,
-        modifier = Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = text,
-                onValueChange = onTextChanged,
-                placeholder = {
-                    Text(
-                        text = "Type a message...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = SecondaryText
-                    )
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .widthIn(min = 100.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Elevated,
-                    unfocusedContainerColor = Elevated,
-                    disabledContainerColor = Elevated,
-                    focusedBorderColor = Border,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedTextColor = PrimaryText,
-                    unfocusedTextColor = PrimaryText
-                ),
-                maxLines = 4,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction = ImeAction.Default
-                )
-            )
-
-            Spacer(Modifier.width(8.dp))
-
-            val canSend = text.isNotBlank() && !isSending
-
-            IconButton(
-                onClick = onSend,
-                enabled = canSend,
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(if (canSend) Accent else Elevated)
-            ) {
-                if (isSending) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = Accent,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "Send message",
-                        tint = if (canSend) Ink else SecondaryText,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        }
-    }
+    ChatInputBar(
+        inputText = text,
+        onInputChange = onTextChanged,
+        onSend = onSend,
+        isSending = isSending,
+        placeholder = stringResource(R.string.type_message),
+        sendIcon = Icons.AutoMirrored.Filled.Send,
+        sendContentDescription = stringResource(R.string.loc_send_message),
+        containerColor = com.calisthenics.ai.ui.theme.Surface,
+        sendButtonBackground = Accent,
+        sendButtonContentColor = Ink
+    )
 }

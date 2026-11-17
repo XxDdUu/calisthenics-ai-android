@@ -123,8 +123,15 @@ class WorkoutPlanDetailsViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel(planId: Long = 42L): WorkoutPlanDetailsViewModel {
-        val savedStateHandle = SavedStateHandle(mapOf("planId" to planId.toString()))
+    private fun createViewModel(
+        planId: Long = 42L,
+        startDate: String? = null
+    ): WorkoutPlanDetailsViewModel {
+        val args = mutableMapOf<String, Any>("planId" to planId.toString())
+        if (startDate != null) {
+            args["startDate"] = startDate
+        }
+        val savedStateHandle = SavedStateHandle(args)
         return WorkoutPlanDetailsViewModel(
             savedStateHandle = savedStateHandle,
             getWorkoutPlanDetailsUseCase = GetWorkoutPlanDetailsUseCase(workoutPlanRepository),
@@ -135,7 +142,8 @@ class WorkoutPlanDetailsViewModelTest {
             removeExerciseFromPlanDayUseCase = RemoveExerciseFromPlanDayUseCase(workoutPlanRepository),
             updateWorkoutPlanUseCase = UpdateWorkoutPlanUseCase(workoutPlanRepository),
             updateWorkoutPlanDaysUseCase = UpdateWorkoutPlanDaysUseCase(workoutPlanRepository),
-            getExercisesUseCase = GetExercisesUseCase(exerciseRepository)
+            getExercisesUseCase = GetExercisesUseCase(exerciseRepository),
+            workoutPlanRepository = workoutPlanRepository
         )
     }
 
@@ -491,5 +499,74 @@ class WorkoutPlanDetailsViewModelTest {
         val created = viewModel.uiState.value.currentDayExercises.last()
         assertEquals(15, created.durationSeconds)
         assertNull(created.reps)
+    }
+
+    @Test
+    fun loadPlanDetails_withPlanStartDate_computesExactDateLabelsAndFallback() = runTest {
+        val planWithDate = samplePlan.copy(startDate = "2026-11-16")
+        coEvery { workoutPlanRepository.getPlanById(42L) } returns Result.success(planWithDate)
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("2026-11-16", state.startDate)
+        assertEquals("MON 16", state.dateLabelFor(WorkoutDayOfWeek.MONDAY))
+        assertEquals("TUE 17", state.dateLabelFor(WorkoutDayOfWeek.TUESDAY))
+        assertEquals("WED 18", state.dateLabelFor(WorkoutDayOfWeek.WEDNESDAY))
+        assertEquals("THU 19", state.dateLabelFor(WorkoutDayOfWeek.THURSDAY))
+        assertEquals("FRI 20", state.dateLabelFor(WorkoutDayOfWeek.FRIDAY))
+        assertEquals("SAT 21", state.dateLabelFor(WorkoutDayOfWeek.SATURDAY))
+        assertEquals("SUN 22", state.dateLabelFor(WorkoutDayOfWeek.SUNDAY))
+    }
+
+    @Test
+    fun loadPlanDetails_withoutStartDate_fallsBackToNullDateLabels() = runTest {
+        coEvery { workoutPlanRepository.getPlanById(42L) } returns Result.success(samplePlan)
+        coEvery { workoutPlanRepository.getMyAssignments() } returns Result.success(emptyList())
+        coEvery { workoutPlanRepository.getMyCoachAssignments() } returns Result.success(emptyList())
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertNull(state.startDate)
+        assertNull(state.parsedStartDate)
+        assertNull(state.dateLabelFor(WorkoutDayOfWeek.MONDAY))
+        assertNull(state.dateLabelFor(WorkoutDayOfWeek.SUNDAY))
+    }
+
+    @Test
+    fun loadPlanDetails_withNavStartDate_usesNavStartDateWhenPlanHasNone() = runTest {
+        coEvery { workoutPlanRepository.getPlanById(42L) } returns Result.success(samplePlan)
+
+        val viewModel = createViewModel(startDate = "2026-11-16")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("2026-11-16", state.startDate)
+        assertEquals("MON 16", state.dateLabelFor(WorkoutDayOfWeek.MONDAY))
+        assertEquals("SUN 22", state.dateLabelFor(WorkoutDayOfWeek.SUNDAY))
+    }
+
+    @Test
+    fun loadPlanDetails_resolvesStartDateFromAssignmentWhenAvailable() = runTest {
+        val assignment = com.calisthenics.ai.domain.model.WorkoutPlanAssignment(
+            id = 99L,
+            coachName = "Coach Alex",
+            startDate = "2026-11-16",
+            createdAt = "2026-11-10",
+            workoutPlan = samplePlan
+        )
+        coEvery { workoutPlanRepository.getPlanById(42L) } returns Result.success(samplePlan)
+        coEvery { workoutPlanRepository.getMyAssignments() } returns Result.success(listOf(assignment))
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("2026-11-16", state.startDate)
+        assertEquals("MON 16", state.dateLabelFor(WorkoutDayOfWeek.MONDAY))
+        assertEquals("TUE 17", state.dateLabelFor(WorkoutDayOfWeek.TUESDAY))
     }
 }

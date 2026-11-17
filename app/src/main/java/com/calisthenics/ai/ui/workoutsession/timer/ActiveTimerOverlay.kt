@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.workoutsession.timer
 
+import com.calisthenics.ai.R
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -42,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -142,7 +145,7 @@ private fun CountdownView(
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "Set ${state.setNumber}",
+                text = stringResource(R.string.loc_set_target, state.setNumber, ""),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -163,7 +166,7 @@ private fun CountdownView(
             }
 
             Text(
-                text = "GET READY...",
+                text = stringResource(R.string.loc_get_ready),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.primary
@@ -175,7 +178,7 @@ private fun CountdownView(
                 onClick = onCancel,
                 modifier = Modifier.fillMaxWidth(0.7f)
             ) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         }
     }
@@ -208,8 +211,11 @@ private fun HoldingView(
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "Set ${state.setNumber}" +
-                    (state.targetHoldDurationSeconds?.let { " · Target: ${it}s" } ?: ""),
+                text = stringResource(
+                    R.string.loc_set_target,
+                    state.setNumber,
+                    state.targetHoldDurationSeconds?.let { stringResource(R.string.loc_target_seconds, it) }.orEmpty()
+                ),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -246,7 +252,7 @@ private fun HoldingView(
                         .background(if (appColors.isDark) appColors.success else Color(0xFF4CAF50))
                 )
                 Text(
-                    text = "HOLDING",
+                    text = stringResource(R.string.loc_holding),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -264,7 +270,7 @@ private fun HoldingView(
             ) {
                 Icon(Icons.Default.Stop, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("STOP", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.loc_stop), fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -292,13 +298,13 @@ private fun SetCompletedView(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "SET COMPLETED",
+                text = stringResource(R.string.loc_set_completed),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = "${state.exerciseName} · Set ${state.setNumber}",
+                text = stringResource(R.string.loc_exercise_set, state.exerciseName, state.setNumber),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -324,7 +330,7 @@ private fun SetCompletedView(
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
-                        text = "Hold Duration: ${state.formattedHoldDuration}",
+                        text = stringResource(R.string.loc_hold_duration, state.formattedHoldDuration),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -342,7 +348,7 @@ private fun SetCompletedView(
             ) {
                 Icon(Icons.Default.Check, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("SAVE SET", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.loc_save_set), fontWeight = FontWeight.Bold)
             }
 
             Row(
@@ -355,13 +361,13 @@ private fun SetCompletedView(
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text("Retry")
+                    Text(stringResource(R.string.common_retry))
                 }
                 TextButton(
                     onClick = onCancel,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         }
@@ -392,7 +398,7 @@ private fun RestingView(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = if (isPaused) "REST PAUSED" else "REST",
+                text = stringResource(if (isPaused) R.string.loc_rest_paused else R.string.loc_rest),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.ExtraBold,
                 color = if (isPaused) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
@@ -400,7 +406,7 @@ private fun RestingView(
 
             if (state.nextExerciseName.isNotBlank()) {
                 Text(
-                    text = "Next: Set ${state.nextSetNumber} · ${state.nextExerciseName}",
+                    text = stringResource(R.string.loc_next_set, state.nextSetNumber, state.nextExerciseName),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -429,7 +435,7 @@ private fun RestingView(
                         fontFamily = FontFamily.Monospace
                     )
                     Text(
-                        text = "remaining",
+                        text = stringResource(R.string.loc_remaining),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -445,13 +451,13 @@ private fun RestingView(
                 OutlinedButton(onClick = { onAddSeconds(15) }) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("+15s")
+                    Text(stringResource(R.string.loc_plus_15_seconds))
                 }
                 Spacer(Modifier.width(12.dp))
                 OutlinedButton(onClick = { onAddSeconds(30) }) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("+30s")
+                    Text(stringResource(R.string.loc_plus_30_seconds))
                 }
             }
 
@@ -469,7 +475,7 @@ private fun RestingView(
                     ) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text("Resume")
+                        Text(stringResource(R.string.resume))
                     }
                 } else {
                     OutlinedButton(
@@ -478,7 +484,7 @@ private fun RestingView(
                     ) {
                         Icon(Icons.Default.Pause, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text("Pause")
+                        Text(stringResource(R.string.pause))
                     }
                 }
 
@@ -489,7 +495,7 @@ private fun RestingView(
                 ) {
                     Icon(Icons.Default.FastForward, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text("Skip")
+                    Text(stringResource(R.string.loc_skip))
                 }
             }
         }
@@ -517,7 +523,7 @@ private fun RestCompletedView(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             Text(
-                text = "REST COMPLETED",
+                text = stringResource(R.string.loc_rest_completed),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.primary
@@ -535,12 +541,12 @@ private fun RestCompletedView(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = "Next Up",
+                            text = stringResource(R.string.loc_next_up),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Text(
-                            text = "${state.nextExerciseName} · Set ${state.nextSetNumber}",
+                            text = stringResource(R.string.loc_next_exercise_set, state.nextExerciseName, state.nextSetNumber),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -551,7 +557,7 @@ private fun RestCompletedView(
             }
 
             Text(
-                text = "Time to begin your next set!",
+                text = stringResource(R.string.loc_time_next_set),
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -565,7 +571,7 @@ private fun RestCompletedView(
                     .fillMaxWidth()
                     .height(54.dp)
             ) {
-                Text("START NEXT SET", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.loc_start_next_set), fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
 
             OutlinedButton(
@@ -574,7 +580,7 @@ private fun RestCompletedView(
             ) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
-                Text("+30s More Rest")
+                Text(stringResource(R.string.loc_plus_30_more_rest))
             }
         }
     }

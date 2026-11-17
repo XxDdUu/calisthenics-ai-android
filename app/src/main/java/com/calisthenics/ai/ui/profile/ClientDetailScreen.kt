@@ -45,10 +45,13 @@ import com.calisthenics.ai.R
 import com.calisthenics.ai.ui.components.DarkCard
 import com.calisthenics.ai.ui.components.EmptyState
 import com.calisthenics.ai.ui.components.EndRelationshipDialog
+import com.calisthenics.ai.ui.components.GenderProfileCard
 import com.calisthenics.ai.ui.components.InfoRow
 import com.calisthenics.ai.ui.components.PillBadge
 import com.calisthenics.ai.ui.components.StatCard
 import com.calisthenics.ai.ui.components.UserAvatar
+import com.calisthenics.ai.ui.report.ReportUserSheet
+import com.calisthenics.ai.ui.components.localizedLabel
 import com.calisthenics.ai.ui.theme.Accent
 import com.calisthenics.ai.ui.theme.Border
 import com.calisthenics.ai.ui.theme.Elevated
@@ -67,6 +70,17 @@ fun ClientDetailScreen(
     val state by viewModel.uiState.collectAsState()
     var showEndDialog by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
+    var showReportSheet by remember { mutableStateOf(false) }
+
+    state.clientProfile?.let { client ->
+        if (showReportSheet) {
+            ReportUserSheet(
+                userId = client.id,
+                userName = client.displayName.ifBlank { client.fullName },
+                onDismiss = { showReportSheet = false }
+            )
+        }
+    }
 
     EndRelationshipDialog(
         isOpen = showEndDialog,
@@ -93,10 +107,10 @@ fun ClientDetailScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PrimaryText)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back), tint = PrimaryText)
             }
             Text(
-                "Client Training Profile",
+                stringResource(R.string.loc_client_training_profile),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = PrimaryText
@@ -105,13 +119,25 @@ fun ClientDetailScreen(
             if (state.clientProfile != null) {
                 Box {
                     IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = SecondaryText)
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_options), tint = SecondaryText)
                     }
                     DropdownMenu(
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false },
                         modifier = Modifier.background(Elevated)
                     ) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(R.string.report_user),
+                                    color = PrimaryText
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                showReportSheet = true
+                            }
+                        )
                         DropdownMenuItem(
                             text = {
                                 Text(
@@ -154,7 +180,9 @@ fun ClientDetailScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        UserAvatar(client.avatarUrl, modifier = Modifier.size(96.dp))
+                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+    UserAvatar(client.avatarUrl, modifier = Modifier.size(96.dp))
+}
 
                         Text(
                             text = client.displayName.ifBlank { client.fullName },
@@ -184,10 +212,25 @@ fun ClientDetailScreen(
                     }
                 }
 
+                // Gender Row
+                GenderProfileCard(gender = client.gender)
+
+                // Athlete Body Metrics Section (Height & Weight)
+                AthleteBodyMetricsSection(
+                    heightCm = client.heightCm,
+                    weightKg = client.weightKg
+                )
+
+                // Athlete Media Gallery (view-only for coach)
+                ProfileMediaGallery(
+                    mediaList = state.clientMedia,
+                    isOwner = false
+                )
+
                 // Training Overview Metrics (Real Data)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Training Progress",
+                        stringResource(R.string.loc_training_progress),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = PrimaryText
@@ -197,12 +240,12 @@ fun ClientDetailScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         StatCard(
-                            label = "Active Plans",
+                            label = stringResource(R.string.loc_active_plans),
                             value = "${overview?.activePlansCount ?: client.activePlansCount}",
                             modifier = Modifier.weight(1f)
                         )
                         StatCard(
-                            label = "Completed Sessions",
+                            label = stringResource(R.string.loc_completed_sessions),
                             value = "${overview?.completedSessionsCount ?: client.completedSessionsCount}",
                             modifier = Modifier.weight(1f)
                         )
@@ -220,7 +263,7 @@ fun ClientDetailScreen(
                         ) {
                             Icon(Icons.Default.FitnessCenter, contentDescription = null, tint = Accent)
                             Text(
-                                "Current Training Plan",
+                                stringResource(R.string.loc_current_training_plan),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = PrimaryText
@@ -238,12 +281,12 @@ fun ClientDetailScreen(
                                     onClick = { onViewPlan(planId) },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text("View Assigned Plan Details")
+                                    Text(stringResource(R.string.loc_view_assigned_plan_details))
                                 }
                             }
                         } else {
                             Text(
-                                text = "Client does not currently have an active workout plan assigned.",
+                                text = stringResource(R.string.loc_client_no_active_plan),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = SecondaryText
                             )
@@ -255,11 +298,12 @@ fun ClientDetailScreen(
                 DarkCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            "Training Goals & Preferences",
+                            stringResource(R.string.loc_training_goals_preferences),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = PrimaryText
                         )
+                        InfoRow(stringResource(R.string.gender), client.gender.localizedLabel())
                         InfoRow("Primary Goals", client.primaryGoals)
                         InfoRow("Training Experience", client.trainingExperience)
                         InfoRow("Interests & Skills", client.trainingInterests)
@@ -272,7 +316,7 @@ fun ClientDetailScreen(
                 DarkCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
-                            "Recent Workout Activity",
+                            stringResource(R.string.loc_recent_workout_activity),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = PrimaryText
@@ -306,7 +350,7 @@ fun ClientDetailScreen(
                             }
                         } else {
                             Text(
-                                "No recent workout sessions recorded yet.",
+                                stringResource(R.string.loc_no_recent_workouts),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = SecondaryText
                             )
@@ -323,7 +367,7 @@ fun ClientDetailScreen(
                     ) {
                         Icon(Icons.Default.ShowChart, contentDescription = null, tint = Accent, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("View Training Progress & PRs")
+                        Text(stringResource(R.string.loc_view_training_progress_prs))
                     }
                 }
 
@@ -345,7 +389,7 @@ fun ClientDetailScreen(
                     if (state.isStartingChat) {
                         CircularProgressIndicator(Modifier.size(20.dp), color = Ink, strokeWidth = 2.dp)
                     } else {
-                        Text("Message Client")
+                        Text(stringResource(R.string.loc_message_client))
                     }
                 }
 

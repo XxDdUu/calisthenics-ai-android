@@ -12,6 +12,10 @@ import com.calisthenics.ai.data.remote.datasource.RemoteWorkoutPlanDataSource
 import com.calisthenics.ai.data.remote.dto.WorkoutPlanDayResponseDto
 import com.calisthenics.ai.data.remote.dto.WorkoutPlanResponseDto
 import com.calisthenics.ai.data.remote.dto.UpdateWorkoutPlanRequestDto
+import com.calisthenics.ai.data.remote.dto.AiWorkoutMetadataDto
+import com.calisthenics.ai.data.remote.dto.AiWorkoutPlanPreviewDto
+import com.calisthenics.ai.data.remote.dto.AiWorkoutSessionPreviewDto
+import com.calisthenics.ai.data.mapper.toDomain
 import com.calisthenics.ai.domain.model.WorkoutDayOfWeek
 import com.calisthenics.ai.domain.model.WorkoutPlanDayConfiguration
 import com.calisthenics.ai.domain.model.WorkoutSessionType
@@ -82,13 +86,14 @@ class WorkoutPlanRepositoryImplTest {
         val plans = result.getOrThrow()
         assertEquals(1, plans.size)
         assertEquals("Push Pull Legs", plans[0].name)
-        coVerify { dao.insertPlans(any()) }
+        coVerify { dao.syncPersonalPlans(1L, any()) }
     }
 
     @Test
     fun getPlans_offline_fallsBackToRoomDatabaseWithoutRemoteCall() = runTest {
         every { connectivityMonitor.isConnected() } returns false
         val cachedPlan = CachedWorkoutPlanEntity(
+            ownerUserId = 1L,
             id = 202L,
             name = "Offline Plan",
             splitType = "PPL",
@@ -99,14 +104,15 @@ class WorkoutPlanRepositoryImplTest {
             updatedAt = 1000L
         )
         val cachedDay = CachedWorkoutPlanDayEntity(
+            ownerUserId = 1L,
             id = 21L,
             planId = 202L,
             dayOfWeek = "MONDAY",
             sessionType = "PUSH"
         )
-        coEvery { dao.getAllPlans() } returns listOf(cachedPlan)
-        coEvery { dao.getDaysForPlan(202L) } returns listOf(cachedDay)
-        coEvery { dao.getExercisesForPlan(202L) } returns emptyList()
+        coEvery { dao.getAllPlans(1L) } returns listOf(cachedPlan)
+        coEvery { dao.getDaysForPlan(1L, 202L) } returns listOf(cachedDay)
+        coEvery { dao.getExercisesForPlan(1L, 202L) } returns emptyList()
 
         val result = repository.getPlans()
 
@@ -122,6 +128,7 @@ class WorkoutPlanRepositoryImplTest {
     fun resolveTodayWorkout_offline_prioritizesCoachAssignedPlanOverPersonalPlan() = runTest {
         every { connectivityMonitor.isConnected() } returns false
         val personalPlan = CachedWorkoutPlanEntity(
+            ownerUserId = 1L,
             id = 1L,
             name = "Personal Plan",
             splitType = "PPL",
@@ -132,6 +139,7 @@ class WorkoutPlanRepositoryImplTest {
             updatedAt = 1000L
         )
         val coachPlan = CachedWorkoutPlanEntity(
+            ownerUserId = 1L,
             id = 2L,
             name = "Coach Plan",
             splitType = "FULL_BODY",
@@ -141,9 +149,9 @@ class WorkoutPlanRepositoryImplTest {
             isActive = false,
             updatedAt = 1000L
         )
-        coEvery { dao.getAllPlans() } returns listOf(personalPlan, coachPlan)
-        coEvery { dao.getDaysForPlan(any()) } returns emptyList()
-        coEvery { dao.getExercisesForPlan(any()) } returns emptyList()
+        coEvery { dao.getAllPlans(1L) } returns listOf(personalPlan, coachPlan)
+        coEvery { dao.getDaysForPlan(1L, any()) } returns emptyList()
+        coEvery { dao.getExercisesForPlan(1L, any()) } returns emptyList()
 
         val result = repository.resolveTodayWorkout("2026-11-05", activePlanId = 1L)
 
@@ -178,6 +186,33 @@ class WorkoutPlanRepositoryImplTest {
         assertTrue(result.isFailure)
         assertEquals("Cannot delete workout plans while offline.", result.exceptionOrNull()?.message)
         coVerify(exactly = 0) { remoteDataSource.deleteWorkoutPlan(any()) }
+    }
+
+    @Test
+    fun deletePlan_online_deletesRemoteInvalidatesRoomClearsActivePlanAndSyncsRemaining() = runTest {
+        every { connectivityMonitor.isConnected() } returns true
+        every { tokenManager.currentSessionSnapshot() } returns com.calisthenics.ai.data.local.AccountSession(
+            activeUserId = 1L,
+            generation = 1L
+        )
+        every { preferences.getLong("user_1.active_plan_id", -1L) } returns 5L
+        every { editor.remove(any()) } returns editor
+        coEvery { remoteDataSource.deleteWorkoutPlan(5L) } returns Unit
+        val remainingDto = WorkoutPlanResponseDto(
+            id = 8L,
+            name = "Remaining Plan",
+            splitType = "PPL",
+            days = emptyList()
+        )
+        coEvery { remoteDataSource.getWorkoutPlans() } returns listOf(remainingDto)
+
+        val result = repository.deletePlan(5L)
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { remoteDataSource.deleteWorkoutPlan(5L) }
+        coVerify(exactly = 1) { dao.deletePlanAndChildren(1L, 5L) }
+        io.mockk.verify { editor.remove("user_1.active_plan_id") }
+        coVerify(exactly = 1) { dao.syncPersonalPlans(1L, match { it.size == 1 && it[0].id == 8L }) }
     }
 
     @Test
@@ -261,5 +296,181 @@ class WorkoutPlanRepositoryImplTest {
                 any()
             )
         }
+    }
+
+    @Test
+    fun generateAiWorkoutPlan_online_callsRemoteDataSource() = runTest {
+        every { connectivityMonitor.isConnected() } returns true
+        val previewDto = AiWorkoutPlanPreviewDto(
+            planName = "AI Planche Program",
+            splitType = "CUSTOM",
+            sessions = emptyList(),
+            metadata = AiWorkoutMetadataDto(modelUsed = "gemini-2.5-flash-lite")
+        )
+        coEvery { remoteDataSource.generateAiWorkoutPlan(any()) } returns previewDto
+
+        val result = repository.generateAiWorkoutPlan(prompt = "Create 6-day planche routine")
+
+        assertTrue(result.isSuccess)
+        assertEquals("AI Planche Program", result.getOrThrow().planName)
+        coVerify { remoteDataSource.generateAiWorkoutPlan(match { it.prompt == "Create 6-day planche routine" }) }
+    }
+
+    @Test
+    fun modifyAiWorkoutPlan_online_callsRemoteDataSource() = runTest {
+        every { connectivityMonitor.isConnected() } returns true
+        val previewDto = AiWorkoutPlanPreviewDto(
+            planName = "Modified Plan",
+            splitType = "CUSTOM",
+            sessions = emptyList(),
+            metadata = AiWorkoutMetadataDto(modelUsed = "gemini-2.5-flash-lite")
+        )
+        coEvery { remoteDataSource.modifyAiWorkoutPlan(any()) } returns previewDto
+
+        val result = repository.modifyAiWorkoutPlan(
+            prompt = "Replace legs with mobility",
+            currentPlan = previewDto.toDomain()
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals("Modified Plan", result.getOrThrow().planName)
+        coVerify { remoteDataSource.modifyAiWorkoutPlan(match { it.prompt == "Replace legs with mobility" }) }
+    }
+
+    @Test
+    fun commitAiWorkoutPlan_online_savesAndSetsActivePlan() = runTest {
+        every { connectivityMonitor.isConnected() } returns true
+        val previewDto = AiWorkoutPlanPreviewDto(
+            planName = "Committed Plan",
+            splitType = "CUSTOM",
+            sessions = emptyList(),
+            metadata = AiWorkoutMetadataDto(modelUsed = "gemini-2.5-flash-lite")
+        )
+        val committedResponse = WorkoutPlanResponseDto(
+            id = 777L,
+            name = "Committed Plan",
+            splitType = "CUSTOM",
+            days = emptyList()
+        )
+        coEvery { remoteDataSource.commitAiWorkoutPlan(any()) } returns committedResponse
+        coEvery { remoteDataSource.getWorkoutPlanById(777L) } returns committedResponse
+
+        val result = repository.commitAiWorkoutPlan(
+            plan = previewDto.toDomain(),
+            replaceExisting = true
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals(777L, result.getOrThrow().id)
+        coVerify { remoteDataSource.commitAiWorkoutPlan(any()) }
+    }
+
+    @Test
+    fun getMyAssignments_and_getMyCoachAssignments_excludeCancelledWhileKeepingInactive() = runTest {
+        val dtoPlan = WorkoutPlanResponseDto(
+            id = 55L,
+            name = "Coach Plan",
+            splitType = "PPL",
+            days = emptyList()
+        )
+        val dtos = listOf(
+            com.calisthenics.ai.data.remote.dto.WorkoutPlanAssignmentDto(
+                id = 1L,
+                relationshipId = 10L,
+                coachName = "Coach",
+                clientName = "Client",
+                status = "ACTIVE",
+                startDate = "2026-10-01",
+                createdAt = "2026-10-01T00:00:00Z",
+                workoutPlan = dtoPlan
+            ),
+            com.calisthenics.ai.data.remote.dto.WorkoutPlanAssignmentDto(
+                id = 2L,
+                relationshipId = 10L,
+                coachName = "Coach",
+                clientName = "Client",
+                status = "INACTIVE",
+                startDate = "2026-10-01",
+                createdAt = "2026-10-01T00:00:00Z",
+                workoutPlan = dtoPlan
+            ),
+            com.calisthenics.ai.data.remote.dto.WorkoutPlanAssignmentDto(
+                id = 3L,
+                relationshipId = 9L,
+                coachName = "Coach",
+                clientName = "Client",
+                status = "CANCELLED",
+                startDate = "2026-09-01",
+                createdAt = "2026-09-01T00:00:00Z",
+                workoutPlan = dtoPlan
+            ),
+            com.calisthenics.ai.data.remote.dto.WorkoutPlanAssignmentDto(
+                id = 4L,
+                relationshipId = 8L,
+                coachName = "Coach",
+                clientName = "Client",
+                status = "ENDED",
+                startDate = "2026-08-01",
+                createdAt = "2026-08-01T00:00:00Z",
+                workoutPlan = dtoPlan
+            )
+        )
+        coEvery { remoteDataSource.getMyAssignments() } returns dtos
+        coEvery { remoteDataSource.getMyCoachAssignments() } returns dtos
+
+        val clientAssignments = repository.getMyAssignments().getOrThrow()
+        val coachAssignments = repository.getMyCoachAssignments().getOrThrow()
+
+        assertEquals(listOf(1L, 2L), clientAssignments.map { it.id })
+        assertEquals(listOf(1L, 2L), coachAssignments.map { it.id })
+    }
+
+    @Test
+    fun getPlanById_preservesCoachAssignedMetadata_andEvictsRoomCacheOn403() = runTest {
+        every { connectivityMonitor.isConnected() } returns true
+        every { tokenManager.currentSessionSnapshot() } returns com.calisthenics.ai.data.local.AccountSession(
+            activeUserId = 1L,
+            generation = 0L
+        )
+        coEvery { dao.getPlanById(1L, 88L) } returns CachedWorkoutPlanEntity(
+            ownerUserId = 1L,
+            id = 88L,
+            name = "Coach Plan",
+            splitType = "PPL",
+            isCoachAssigned = true,
+            coachName = "Coach Alex",
+            assignmentId = 44L,
+            isActive = true
+        )
+        coEvery { remoteDataSource.getWorkoutPlanById(88L) } returns WorkoutPlanResponseDto(
+            id = 88L,
+            name = "Coach Plan Updated",
+            splitType = "PPL",
+            days = emptyList(),
+            isActive = false
+        )
+        val savedPlanSlot = slot<CachedWorkoutPlanEntity>()
+        coEvery { dao.saveFullPlan(capture(savedPlanSlot), any(), any()) } returns Unit
+
+        val loaded = repository.getPlanById(88L).getOrThrow()
+
+        assertEquals(88L, loaded.id)
+        assertTrue(savedPlanSlot.captured.isCoachAssigned)
+        assertEquals("Coach Alex", savedPlanSlot.captured.coachName)
+        assertEquals(44L, savedPlanSlot.captured.assignmentId)
+        assertTrue(savedPlanSlot.captured.isActive)
+
+        val forbidden = retrofit2.HttpException(
+            retrofit2.Response.error<Any>(
+                403,
+                okhttp3.ResponseBody.create(null, "")
+            )
+        )
+        coEvery { remoteDataSource.getWorkoutPlanById(88L) } throws forbidden
+
+        val revokedResult = repository.getPlanById(88L)
+
+        assertTrue(revokedResult.isFailure)
+        coVerify(exactly = 1) { dao.deletePlanAndChildren(1L, 88L) }
     }
 }

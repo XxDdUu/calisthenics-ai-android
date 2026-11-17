@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.components
 
+import com.calisthenics.ai.R
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -40,12 +43,14 @@ import com.calisthenics.ai.ui.theme.SecondaryText
 @Composable
 fun DarkCard(
     modifier: Modifier = Modifier,
+    border: androidx.compose.foundation.BorderStroke? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = Elevated),
+        border = border,
         content = content
     )
 }
@@ -87,7 +92,7 @@ fun UserAvatar(
         ) {
             Icon(
                 Icons.Default.Person,
-                contentDescription = "Profile avatar",
+                contentDescription = stringResource(R.string.profile_avatar_content_description),
                 tint = SecondaryText,
                 modifier = Modifier.size(28.dp)
             )
@@ -95,7 +100,7 @@ fun UserAvatar(
     } else {
         AsyncImage(
             model = url,
-            contentDescription = "Profile avatar",
+            contentDescription = stringResource(R.string.profile_avatar_content_description),
             modifier = modifier
                 .clip(CircleShape)
                 .border(1.dp, Border, CircleShape),
@@ -182,7 +187,7 @@ fun InfoRow(
             color = SecondaryText
         )
         Text(
-            text = value?.takeIf { it.isNotBlank() } ?: "Not specified",
+            text = value?.takeIf { it.isNotBlank() } ?: stringResource(R.string.loc_not_specified),
             style = MaterialTheme.typography.bodyMedium,
             color = if (value.isNullOrBlank()) SecondaryText.copy(alpha = 0.6f) else PrimaryText
         )

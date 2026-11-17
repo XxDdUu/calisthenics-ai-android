@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.workoutplan.list
 
+import com.calisthenics.ai.R
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FitnessCenter
@@ -32,23 +35,36 @@ import androidx.compose.material3.Card
 import com.calisthenics.ai.ui.navigation.FloatingBottomBarDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -57,9 +73,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.calisthenics.ai.domain.model.UserWorkoutPlan
+import com.calisthenics.ai.domain.model.WorkoutPlanAssignment
+import com.calisthenics.ai.domain.model.WorkoutPlanAssignmentStatus
+import com.calisthenics.ai.domain.model.WorkoutSession
 import com.calisthenics.ai.domain.model.WorkoutSplitType
 import com.calisthenics.ai.ui.components.ErrorView
 import com.calisthenics.ai.ui.components.LoadingView
+import com.calisthenics.ai.ui.home.GettingStartedActivePlanCard
 import com.calisthenics.ai.ui.theme.Accent
 import com.calisthenics.ai.ui.theme.Border
 import com.calisthenics.ai.ui.theme.Elevated
@@ -68,21 +88,52 @@ import com.calisthenics.ai.ui.theme.Ink
 import com.calisthenics.ai.ui.theme.PrimaryText
 import com.calisthenics.ai.ui.theme.SecondaryText
 import com.calisthenics.ai.ui.theme.Surface
+import com.calisthenics.ai.ui.workoutplan.ai.AiWorkoutPlannerScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkoutPlanListScreen(
     onPlanClick: (Long) -> Unit,
+    onOpenAiPlanner: ((Long?, String?) -> Unit)? = null,
+    onPlanClickWithDate: ((Long, String?) -> Unit)? = null,
+    onStartGettingStartedSession: (WorkoutSession) -> Unit = {},
     viewModel: WorkoutPlanListViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshAll()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var isAiPlannerOpen by rememberSaveable { mutableStateOf(false) }
+
+    val openAiPlanner = {
+        val selectedClient = uiState.clients.firstOrNull { it.clientId == uiState.selectedClientId }
+        val clientId = if (selectedTab == 1) uiState.selectedClientId else null
+        val clientName = if (selectedTab == 1) selectedClient?.clientName else null
+        if (onOpenAiPlanner != null) {
+            onOpenAiPlanner(clientId, clientName)
+        } else {
+            isAiPlannerOpen = true
+        }
+    }
+    var isAssignmentSheetOpen by rememberSaveable { mutableStateOf(false) }
+    // A coach may have assignments even when there are no currently active client
+    // relationships, so assignment ownership is also a signal for the coach view.
+    val hasCoachAssignments = uiState.coachAssignments.isNotEmpty() || uiState.clients.isNotEmpty()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = "Workout Plans",
+                        text = stringResource(R.string.loc_workout_plans_title),
                         style = androidx.compose.material3.MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             color = PrimaryText
@@ -90,6 +141,39 @@ fun WorkoutPlanListScreen(
                     )
                 },
                 actions = {
+                    if (selectedTab == 2) {
+                        Button(
+                            onClick = {
+                                viewModel.clearAssignmentMessage()
+                                if (uiState.availableExercises.isEmpty()) {
+                                    viewModel.loadExercisesCatalog()
+                                }
+                                isAssignmentSheetOpen = true
+                            },
+                            modifier = Modifier.padding(end = 4.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Accent,
+                                contentColor = Ink
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp)
+                        ) {
+                            Text(stringResource(R.string.assign_workout), fontSize = 12.sp)
+                        }
+                    }
+                    IconButton(
+                        onClick = { openAiPlanner() },
+                        modifier = Modifier
+                            .padding(end = 6.dp)
+                            .clip(CircleShape)
+                            .background(Accent.copy(alpha = 0.15f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = stringResource(R.string.ai_workout_planner_title),
+                            tint = Accent
+                        )
+                    }
+
                     IconButton(
                         onClick = { viewModel.openCreateDialog() },
                         modifier = Modifier
@@ -99,7 +183,7 @@ fun WorkoutPlanListScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "Create Plan",
+                            contentDescription = stringResource(R.string.create_plan),
                             tint = Accent
                         )
                     }
@@ -117,19 +201,195 @@ fun WorkoutPlanListScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            when {
-                uiState.isLoading && uiState.plans.isEmpty() -> {
-                    LoadingView(message = "Loading your workout plans...")
+            Column(modifier = Modifier.fillMaxSize()) {
+                ScrollableTabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = Ink,
+                    contentColor = PrimaryText,
+                    edgePadding = 16.dp
+                ) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text(stringResource(R.string.loc_your_personal_plan), maxLines = 1) }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text(stringResource(R.string.loc_client_personal_plan), maxLines = 1) }
+                    )
+                    Tab(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        text = { Text(stringResource(R.string.loc_assignment_plan), maxLines = 1) }
+                    )
                 }
-                uiState.error != null && uiState.plans.isEmpty() -> {
+
+                when {
+                selectedTab == 1 -> {
+                    Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
+                        if (uiState.clients.isEmpty()) {
+                            Text(stringResource(R.string.loc_no_connected_clients), color = SecondaryText)
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                uiState.clients.forEach { client ->
+                                    FilterChip(
+                                        selected = uiState.selectedClientId == client.clientId,
+                                        onClick = { viewModel.selectClient(client.clientId) },
+                                        label = { Text(client.clientName, maxLines = 1) }
+                                    )
+                                }
+                            }
+                            if (uiState.selectedClientId != null) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    Button(
+                                        onClick = { openAiPlanner() },
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Accent,
+                                            contentColor = Ink
+                                        )
+                                    ) {
+                                        Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(stringResource(R.string.ai_planner_cta_button), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                            when {
+                                uiState.isLoadingClientPlans -> CircularProgressIndicator()
+                                uiState.clientPlanError != null -> Text(
+                                    uiState.clientPlanError ?: "",
+                                    color = Error,
+                                    modifier = Modifier.padding(top = 16.dp)
+                                )
+                                uiState.clientPlans.isEmpty() -> Text(
+                                    stringResource(R.string.loc_this_client_no_personal_plans),
+                                    color = SecondaryText,
+                                    modifier = Modifier.padding(top = 16.dp)
+                                )
+                                else -> LazyColumn(
+                                    modifier = Modifier.fillMaxSize().padding(top = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    items(uiState.clientPlans, key = { it.id }) { plan ->
+                                        WorkoutPlanCard(plan, { onPlanClick(plan.id) }, {})
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                selectedTab == 2 -> {
+                    if (!hasCoachAssignments) {
+                        if (uiState.assignments.isEmpty()) {
+                            Text(stringResource(R.string.loc_no_assigned_workout_plans), color = SecondaryText, modifier = Modifier.padding(20.dp))
+                        } else {
+                            LazyColumn(modifier = Modifier.fillMaxSize().padding(20.dp)) {
+                                items(uiState.assignments, key = { it.id }) { assignment ->
+                                    WorkoutPlanCard(
+                                        assignment.workoutPlan,
+                                        {
+                                            if (assignment.status == WorkoutPlanAssignmentStatus.ACTIVE) {
+                                                if (onPlanClickWithDate != null) {
+                                                    onPlanClickWithDate(assignment.workoutPlan.id, assignment.startDate)
+                                                } else {
+                                                    onPlanClick(assignment.workoutPlan.id)
+                                                }
+                                            }
+                                        },
+                                        null,
+                                        subtitle = (assignment.coachName?.let { stringResource(R.string.assigned_by_coach, it) }
+                                            ?: stringResource(R.string.assigned_by_your_coach)) +
+                                            (assignment.startDate?.let { " • ${stringResource(R.string.loc_starts_date, it)}" } ?: ""),
+                                        assignment = assignment
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(20.dp)
+                        ) {
+                            uiState.assignmentError?.let { errorMessage ->
+                                Text(
+                                    text = errorMessage,
+                                    color = Error,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize().padding(top = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                item {
+                                    Text(
+                                        stringResource(R.string.loc_coach_assignments),
+                                        color = PrimaryText,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                if (uiState.coachAssignments.isEmpty()) {
+                                    item {
+                                        Text(
+                                            stringResource(R.string.loc_no_assigned_workout_plans),
+                                            color = SecondaryText
+                                        )
+                                    }
+                                } else {
+                                    items(uiState.coachAssignments, key = { it.id }) { assignment ->
+                                        WorkoutPlanCard(
+                                            plan = assignment.workoutPlan,
+                                            onClick = {
+                                                if (onPlanClickWithDate != null) {
+                                                    onPlanClickWithDate(assignment.workoutPlan.id, assignment.startDate)
+                                                } else {
+                                                    onPlanClick(assignment.workoutPlan.id)
+                                                }
+                                            },
+                                            onDeleteClick = null,
+                                            subtitle = assignment.clientName?.let {
+                                                stringResource(R.string.loc_assignment_for_athlete, it)
+                                            },
+                                            assignment = assignment,
+                                            onAssignmentToggle = {
+                                                viewModel.requestAssignmentStatusChange(assignment)
+                                            },
+                                            isAssignmentUpdating = uiState.updatingAssignmentId == assignment.id
+                                        )
+                                    }
+                                }
+                                uiState.assignmentMessage?.let {
+                                    item {
+                                        Text(
+                                            it,
+                                            color = if (it.startsWith("Plan assigned")) PrimaryText else Error
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                uiState.isLoading && uiState.plans.isEmpty() && uiState.activeGettingStartedProgram == null -> {
+                    LoadingView(message = stringResource(R.string.loc_loading_workout_plans))
+                }
+                uiState.error != null && uiState.plans.isEmpty() && uiState.activeGettingStartedProgram == null -> {
                     ErrorView(
-                        message = uiState.error ?: "Unable to load workout plans",
+                        message = uiState.error ?: stringResource(R.string.loc_unable_load_workout_plans),
                         onRetry = { viewModel.loadPlans() }
                     )
                 }
-                uiState.plans.isEmpty() -> {
+                uiState.plans.isEmpty() && uiState.activeGettingStartedProgram == null -> {
                     EmptyWorkoutPlansView(
                         isOnline = uiState.isOnline,
+                        onAiPlannerClick = { openAiPlanner() },
                         onCreateClick = { viewModel.openCreateDialog() },
                         onRetryClick = { viewModel.loadPlans() }
                     )
@@ -142,20 +402,119 @@ fun WorkoutPlanListScreen(
                         contentPadding = PaddingValues(bottom = FloatingBottomBarDefaults.ContentBottomPadding),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        items(uiState.plans, key = { it.id }) { plan ->
-                            WorkoutPlanCard(
-                                plan = plan,
-                                onClick = { onPlanClick(plan.id) },
-                                onDeleteClick = { viewModel.confirmDeletePlan(plan) }
+                        item {
+                            AiWorkoutPlannerBanner(
+                                onPlanWithAiClick = { openAiPlanner() }
                             )
+                        }
+                        uiState.activeGettingStartedProgram?.let { program ->
+                            item(key = "getting-started-active-program") {
+                                GettingStartedActivePlanCard(
+                                    program = program,
+                                    startingDayNumber = uiState.startingGettingStartedDay,
+                                    onStartDay = { dayNumber ->
+                                        viewModel.startGettingStartedDay(
+                                            dayNumber = dayNumber,
+                                            onSessionStarted = onStartGettingStartedSession
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                        uiState.gettingStartedError?.let { errorMsg ->
+                            item(key = "getting-started-error") {
+                                Text(
+                                    text = errorMsg,
+                                    color = Error,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                        if (uiState.plans.isEmpty()) {
+                            item(key = "create-personal-plan-cta") {
+                                OutlinedButton(
+                                    onClick = { viewModel.openCreateDialog() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(stringResource(R.string.create_plan))
+                                }
+                            }
+                        } else {
+                            items(uiState.plans, key = { it.id }) { plan ->
+                                WorkoutPlanCard(
+                                    plan = plan,
+                                    onClick = { onPlanClick(plan.id) },
+                                    onDeleteClick = { viewModel.confirmDeletePlan(plan) }
+                                )
+                            }
                         }
                         item {
                             Spacer(modifier = Modifier.height(32.dp))
                         }
                     }
+                    }
                 }
             }
         }
+    }
+
+    uiState.assignmentToDeactivate?.let { assignment ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissAssignmentDeactivation,
+            title = {
+                Text(
+                    text = stringResource(R.string.loc_deactivate_assignment_question),
+                    color = PrimaryText,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.loc_deactivate_assignment_description),
+                    color = SecondaryText
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = viewModel::confirmAssignmentDeactivation,
+                    colors = ButtonDefaults.buttonColors(containerColor = Error),
+                    enabled = uiState.updatingAssignmentId == null
+                ) {
+                    Text(stringResource(R.string.loc_deactivate_assignment))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissAssignmentDeactivation) {
+                    Text(stringResource(R.string.cancel), color = SecondaryText)
+                }
+            },
+            containerColor = Elevated,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // AI Workout Planner full screen (fallback if not navigated via NavController)
+    if (isAiPlannerOpen) {
+        val selectedClient = uiState.clients.firstOrNull { it.clientId == uiState.selectedClientId }
+        AiWorkoutPlannerScreen(
+            clientId = if (selectedTab == 1) uiState.selectedClientId else null,
+            clientName = if (selectedTab == 1) selectedClient?.clientName else null,
+            onBackClick = { isAiPlannerOpen = false },
+            onPlanCommitted = { committedPlan ->
+                isAiPlannerOpen = false
+                viewModel.loadPlans()
+                if (selectedTab == 1 && uiState.selectedClientId != null) {
+                    viewModel.selectClient(uiState.selectedClientId!!)
+                }
+                onPlanClick(committedPlan.id)
+            }
+        )
     }
 
     // Create Plan Dialog
@@ -178,14 +537,14 @@ fun WorkoutPlanListScreen(
             onDismissRequest = viewModel::dismissDeleteDialog,
             title = {
                 Text(
-                    text = "Delete Plan?",
+                    text = stringResource(R.string.loc_delete_plan_question),
                     color = PrimaryText,
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
-                    text = "Are you sure you want to delete \"${plan.name}\"? All scheduled days and exercise assignments will be removed.",
+                    text = stringResource(R.string.loc_delete_plan_confirm, plan.name),
                     color = SecondaryText
                 )
             },
@@ -202,17 +561,62 @@ fun WorkoutPlanListScreen(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text("Delete", color = PrimaryText, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.common_delete), color = PrimaryText, fontWeight = FontWeight.SemiBold)
                     }
                 }
             },
             dismissButton = {
                 TextButton(onClick = viewModel::dismissDeleteDialog) {
-                    Text("Cancel", color = SecondaryText)
+                    Text(stringResource(R.string.cancel), color = SecondaryText)
                 }
             },
             containerColor = Elevated,
             shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    if (isAssignmentSheetOpen) {
+        CoachAssignmentBottomSheet(
+            relationships = uiState.clients,
+            plans = uiState.plans,
+            selectedClientId = uiState.selectedClientId,
+            onSelectClient = viewModel::selectClient,
+            isSubmitting = uiState.assigningPlanId != null,
+            error = uiState.assignmentMessage,
+            availableExercises = uiState.availableExercises,
+            isLoadingExercises = uiState.isLoadingExercises,
+            exercisesError = uiState.exercisesError,
+            onRetryLoadExercises = viewModel::loadExercisesCatalog,
+            onClearError = viewModel::clearAssignmentMessage,
+            onAssign = { clientId, planId, _ ->
+                viewModel.assignPlanToClient(clientId, planId) {
+                    isAssignmentSheetOpen = false
+                }
+            },
+            onAssignWithDetails = { clientId, planId, startDate, endDate, notes, _ ->
+                viewModel.assignPlanWithDetailsToClient(clientId, planId, startDate, endDate, notes) {
+                    isAssignmentSheetOpen = false
+                }
+            },
+            onCreateAndAssignCustomWorkout = { clientId, name, sessionType, targetDay, exercises, startDate, endDate, notes, _ ->
+                viewModel.createCustomWorkoutAndAssignToClient(
+                    clientId = clientId,
+                    workoutName = name,
+                    sessionType = sessionType,
+                    targetDay = targetDay,
+                    configuredExercises = exercises,
+                    startDate = startDate,
+                    endDate = endDate,
+                    notes = notes,
+                    onSuccess = { isAssignmentSheetOpen = false }
+                )
+            },
+            onDismiss = {
+                if (uiState.assigningPlanId == null) {
+                    isAssignmentSheetOpen = false
+                    viewModel.clearAssignmentMessage()
+                }
+            }
         )
     }
 }
@@ -221,7 +625,11 @@ fun WorkoutPlanListScreen(
 fun WorkoutPlanCard(
     plan: UserWorkoutPlan,
     onClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: (() -> Unit)? = null,
+    subtitle: String? = null,
+    assignment: WorkoutPlanAssignment? = null,
+    onAssignmentToggle: (() -> Unit)? = null,
+    isAssignmentUpdating: Boolean = false
 ) {
     Card(
         modifier = Modifier
@@ -235,6 +643,7 @@ fun WorkoutPlanCard(
                 .fillMaxWidth()
                 .padding(20.dp)
         ) {
+            subtitle?.let { Text(it, color = SecondaryText, style = MaterialTheme.typography.bodySmall) }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -257,15 +666,77 @@ fun WorkoutPlanCard(
                     )
                 }
 
-                IconButton(
-                    onClick = onDeleteClick,
-                    modifier = Modifier.size(28.dp)
+                onDeleteClick?.let { delete ->
+                    IconButton(
+                        onClick = delete,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.loc_delete_plan_content_description),
+                            tint = SecondaryText.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            assignment?.let { currentAssignment ->
+                val isActive = currentAssignment.status == WorkoutPlanAssignmentStatus.ACTIVE
+                val isInactive = currentAssignment.status == WorkoutPlanAssignmentStatus.INACTIVE
+                val isToggleable = isActive || isInactive
+                val statusLabel = when (currentAssignment.status) {
+                    WorkoutPlanAssignmentStatus.ACTIVE -> R.string.loc_assignment_status_active
+                    WorkoutPlanAssignmentStatus.INACTIVE -> R.string.loc_assignment_status_inactive
+                    WorkoutPlanAssignmentStatus.CANCELLED -> R.string.loc_assignment_status_cancelled
+                    WorkoutPlanAssignmentStatus.COMPLETED -> R.string.completed_status
+                    WorkoutPlanAssignmentStatus.UPCOMING -> R.string.upcoming_status
+                    else -> null
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete Plan",
-                        tint = SecondaryText.copy(alpha = 0.6f),
-                        modifier = Modifier.size(18.dp)
+                    statusLabel?.let { labelRes ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background((if (isActive) Accent else Error).copy(alpha = 0.16f))
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                text = stringResource(labelRes),
+                                color = if (isActive) Accent else Error,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    onAssignmentToggle?.takeIf { isToggleable }?.let { toggle ->
+                        TextButton(onClick = toggle, enabled = !isAssignmentUpdating) {
+                            if (isAssignmentUpdating) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            } else {
+                                Text(
+                                    stringResource(
+                                        if (isActive) R.string.loc_deactivate_assignment
+                                        else R.string.loc_reactivate_assignment
+                                    ),
+                                    color = if (isActive) Error else Accent
+                                )
+                            }
+                        }
+                    }
+                }
+                if (isInactive && onAssignmentToggle == null) {
+                    Text(
+                        text = stringResource(R.string.loc_inactive_assignment_history),
+                        color = SecondaryText,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 6.dp)
                     )
                 }
             }
@@ -305,7 +776,7 @@ fun WorkoutPlanCard(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "${plan.trainingDayCount} training days",
+                            text = stringResource(R.string.loc_training_days_count, plan.trainingDayCount),
                             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(
                                 color = SecondaryText
                             )
@@ -323,7 +794,7 @@ fun WorkoutPlanCard(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "${plan.totalExerciseCount} exercises",
+                                text = stringResource(R.string.exercises_count_label, plan.totalExerciseCount),
                                 style = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(
                                 color = SecondaryText
                             )
@@ -334,7 +805,7 @@ fun WorkoutPlanCard(
 
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = "Open Plan",
+                contentDescription = stringResource(R.string.loc_open_plan),
                 tint = Accent,
                 modifier = Modifier.size(20.dp)
             )
@@ -346,6 +817,7 @@ fun WorkoutPlanCard(
 @Composable
 fun EmptyWorkoutPlansView(
     isOnline: Boolean = true,
+    onAiPlannerClick: () -> Unit = {},
     onCreateClick: () -> Unit,
     onRetryClick: () -> Unit = {}
 ) {
@@ -374,7 +846,7 @@ fun EmptyWorkoutPlansView(
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = if (!isOnline) "Offline Mode" else "No Workout Plans Yet",
+            text = if (!isOnline) stringResource(R.string.loc_offline_mode) else stringResource(R.string.loc_no_workout_plans_yet),
             style = androidx.compose.material3.MaterialTheme.typography.titleLarge.copy(
                 fontWeight = FontWeight.Bold,
                 color = PrimaryText
@@ -385,9 +857,9 @@ fun EmptyWorkoutPlansView(
 
         Text(
             text = if (!isOnline)
-                "No cached workout schedule available. Connect to the internet to sync your schedule."
+                stringResource(R.string.no_cached_schedule)
             else
-                "Create a structured weekly calisthenics plan to track your progressions and workouts.",
+                stringResource(R.string.loc_create_plan_description),
             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(
                 color = SecondaryText
             ),
@@ -397,21 +869,39 @@ fun EmptyWorkoutPlansView(
         Spacer(modifier = Modifier.height(24.dp))
 
         if (isOnline) {
-            Button(
-                onClick = onCreateClick,
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Accent,
-                    contentColor = Ink
-                ),
-                modifier = Modifier.height(48.dp)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Create First Plan",
-                    fontWeight = FontWeight.Bold
-                )
+                Button(
+                    onClick = onAiPlannerClick,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Accent,
+                        contentColor = Ink
+                    ),
+                    modifier = Modifier.height(48.dp).fillMaxWidth(0.85f)
+                ) {
+                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.ai_planner_cta_button),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                TextButton(
+                    onClick = onCreateClick,
+                    modifier = Modifier.height(40.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = SecondaryText, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.loc_create_first_plan),
+                        color = SecondaryText
+                    )
+                }
             }
         } else {
             Button(
@@ -424,9 +914,110 @@ fun EmptyWorkoutPlansView(
                 modifier = Modifier.height(48.dp)
             ) {
                 Text(
-                    text = "Retry Connection",
+                    text = stringResource(R.string.loc_retry_connection),
                     fontWeight = FontWeight.Bold
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun AiWorkoutPlannerBanner(
+    onPlanWithAiClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onPlanWithAiClick),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Elevated)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, Accent.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
+                .padding(18.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(Accent.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = Accent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.ai_planner_banner_title),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = PrimaryText
+                            )
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Accent.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "AI",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = Accent,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp
+                            )
+                        )
+                    }
+                }
+
+                Text(
+                    text = stringResource(R.string.ai_planner_banner_subtitle),
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = SecondaryText,
+                        lineHeight = 18.sp
+                    )
+                )
+
+                Button(
+                    onClick = onPlanWithAiClick,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Accent,
+                        contentColor = Ink
+                    ),
+                    modifier = Modifier.height(38.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.ai_planner_cta_button),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
             }
         }
     }
@@ -447,7 +1038,7 @@ fun CreatePlanDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "New Workout Plan",
+                text = stringResource(R.string.loc_new_workout_plan),
                 color = PrimaryText,
                 fontWeight = FontWeight.Bold
             )
@@ -455,7 +1046,7 @@ fun CreatePlanDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Plan Name",
+                    text = stringResource(R.string.loc_plan_name_label),
                     style = androidx.compose.material3.MaterialTheme.typography.labelMedium.copy(
                         color = SecondaryText
                     )
@@ -464,7 +1055,7 @@ fun CreatePlanDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = onNameChange,
-                    placeholder = { Text("e.g. Planche & Front Lever Focus", color = SecondaryText) },
+                    placeholder = { Text(stringResource(R.string.loc_example_plan_focus), color = SecondaryText) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = PrimaryText,
@@ -481,7 +1072,7 @@ fun CreatePlanDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Weekly Split Structure",
+                    text = stringResource(R.string.loc_weekly_split_structure),
                     style = androidx.compose.material3.MaterialTheme.typography.labelMedium.copy(
                         color = SecondaryText
                     )
@@ -515,10 +1106,10 @@ fun CreatePlanDialog(
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = when (split) {
-                                        WorkoutSplitType.PPL -> "Push · Pull · Legs (6 training days)"
-                                        WorkoutSplitType.UPPER_LOWER -> "Upper · Lower · Upper · Lower (4 training days)"
-                                        WorkoutSplitType.FULL_BODY -> "Full Body 3x per week (3 training days)"
-                                        WorkoutSplitType.CUSTOM -> "Start with a blank 7-day schedule"
+                                        WorkoutSplitType.PPL -> stringResource(R.string.loc_split_ppl)
+                                        WorkoutSplitType.UPPER_LOWER -> stringResource(R.string.loc_split_upper_lower)
+                                        WorkoutSplitType.FULL_BODY -> stringResource(R.string.loc_split_full_body)
+                                        WorkoutSplitType.CUSTOM -> stringResource(R.string.loc_split_custom)
                                     },
                                     style = androidx.compose.material3.MaterialTheme.typography.labelSmall.copy(
                                         color = SecondaryText
@@ -556,13 +1147,13 @@ fun CreatePlanDialog(
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Text("Create Plan", fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.create_plan), fontWeight = FontWeight.Bold)
                 }
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = SecondaryText)
+                Text(stringResource(R.string.cancel), color = SecondaryText)
             }
         },
         containerColor = Elevated,

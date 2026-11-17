@@ -7,7 +7,14 @@ import com.calisthenics.ai.data.remote.dto.WorkoutDayExercisesBatchRequestDto
 import com.calisthenics.ai.data.remote.dto.WorkoutPlanExerciseRequestDto
 import com.calisthenics.ai.data.remote.dto.WorkoutPlanExerciseResponseDto
 import com.calisthenics.ai.data.remote.dto.WorkoutPlanResponseDto
+import com.calisthenics.ai.data.remote.dto.CreateWorkoutPlanAssignmentRequestDto
+import com.calisthenics.ai.data.remote.dto.WorkoutPlanAssignmentDto
+import com.calisthenics.ai.data.remote.dto.UpdateWorkoutPlanAssignmentStatusRequestDto
 import com.calisthenics.ai.data.remote.dto.WorkoutPlanTemplateResponseDto
+import com.calisthenics.ai.data.remote.dto.AiWorkoutPlanPreviewDto
+import com.calisthenics.ai.data.remote.dto.CommitAiWorkoutPlanRequestDto
+import com.calisthenics.ai.data.remote.dto.GenerateAiWorkoutPlanRequestDto
+import com.calisthenics.ai.data.remote.dto.ModifyAiWorkoutPlanRequestDto
 import com.calisthenics.ai.data.remote.dto.TodayWorkoutResolutionResponseDto
 import javax.inject.Inject
 
@@ -17,6 +24,39 @@ class RemoteWorkoutPlanDataSource @Inject constructor(
     suspend fun getWorkoutPlans(): List<WorkoutPlanResponseDto> {
         return api.getWorkoutPlans()
     }
+
+    suspend fun getClientPersonalWorkoutPlans(clientId: Long): List<WorkoutPlanResponseDto> =
+        api.getClientPersonalWorkoutPlans(clientId)
+
+    suspend fun assignWorkoutPlan(
+        relationshipId: Long,
+        planId: Long,
+        startDate: String? = null,
+        endDate: String? = null,
+        notes: String? = null
+    ) {
+        api.assignWorkoutPlan(
+            relationshipId,
+            CreateWorkoutPlanAssignmentRequestDto(
+                workoutPlanId = planId,
+                startDate = startDate,
+                endDate = endDate,
+                notes = notes
+            )
+        )
+    }
+
+    suspend fun getMyAssignments(): List<WorkoutPlanAssignmentDto> =
+        api.getMyWorkoutPlanAssignments()
+
+    suspend fun getMyCoachAssignments(): List<WorkoutPlanAssignmentDto> =
+        api.getMyCoachWorkoutPlanAssignments()
+
+    suspend fun updateAssignmentStatus(assignmentId: Long, status: String): WorkoutPlanAssignmentDto =
+        api.updateWorkoutPlanAssignmentStatus(
+            assignmentId,
+            UpdateWorkoutPlanAssignmentStatusRequestDto(status)
+        )
 
     suspend fun resolveTodayWorkout(date: String, activePlanId: Long?): TodayWorkoutResolutionResponseDto {
         return api.resolveTodayWorkout(date, activePlanId)
@@ -84,4 +124,13 @@ class RemoteWorkoutPlanDataSource @Inject constructor(
             throw RuntimeException("Failed to remove exercise from workout plan day: HTTP ${response.code()}")
         }
     }
+
+    suspend fun generateAiWorkoutPlan(request: GenerateAiWorkoutPlanRequestDto): AiWorkoutPlanPreviewDto =
+        api.generateAiWorkoutPlan(request)
+
+    suspend fun modifyAiWorkoutPlan(request: ModifyAiWorkoutPlanRequestDto): AiWorkoutPlanPreviewDto =
+        api.modifyAiWorkoutPlan(request)
+
+    suspend fun commitAiWorkoutPlan(request: CommitAiWorkoutPlanRequestDto): WorkoutPlanResponseDto =
+        api.commitAiWorkoutPlan(request)
 }

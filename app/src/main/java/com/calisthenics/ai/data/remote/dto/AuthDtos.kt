@@ -39,6 +39,10 @@ data class GoogleLoginRequestDto(
     @SerializedName("idToken") val idToken: String
 )
 
+data class FirebaseLoginRequestDto(
+    @SerializedName("idToken") val idToken: String
+)
+
 data class AuthResponseDto(
     @SerializedName("accessToken") val accessToken: String,
     @SerializedName("refreshToken") val refreshToken: String,
@@ -46,7 +50,9 @@ data class AuthResponseDto(
     @SerializedName("userId") val userId: Long,
     @SerializedName("email") val email: String,
     @SerializedName("fullName") val fullName: String,
-    @SerializedName("role") val role: String
+    @SerializedName("role") val role: String,
+    @SerializedName("gender") val gender: String? = null,
+    @SerializedName("onboardingStatus") val onboardingStatus: String? = null
 )
 
 data class UserProfileResponseDto(
@@ -54,7 +60,32 @@ data class UserProfileResponseDto(
     @SerializedName("email") val email: String,
     @SerializedName("fullName") val fullName: String,
     @SerializedName("experienceLevel") val experienceLevel: String?,
-    @SerializedName("role") val role: String?
+    @SerializedName("role") val role: String?,
+    @SerializedName("gender") val gender: String? = null,
+    @SerializedName("onboardingStatus") val onboardingStatus: String? = null,
+    @SerializedName("membershipTier") val membershipTier: String? = null,
+    @SerializedName("dailyQuotaLimit") val dailyQuotaLimit: Int? = null,
+    @SerializedName("dailyQuotaUsed") val dailyQuotaUsed: Int? = null,
+    @SerializedName("dailyQuotaRemaining") val dailyQuotaRemaining: Int? = null,
+    @SerializedName("liveAnalysisUnlocked") val liveAnalysisUnlocked: Boolean? = null,
+    @SerializedName("unlimited") val unlimited: Boolean? = null,
+    @SerializedName("membershipSource") val membershipSource: String? = null,
+    @SerializedName("adminGrantedPro") val adminGrantedPro: Boolean? = null
+)
+
+data class UpdateUserProfileRequestDto(
+    @SerializedName("fullName") val fullName: String? = null,
+    @SerializedName("avatarUrl") val avatarUrl: String? = null,
+    @SerializedName("experienceLevel") val experienceLevel: String? = null,
+    @SerializedName("gender") val gender: String? = null
+)
+
+data class UpdateGenderRequestDto(
+    @SerializedName("gender") val gender: String
+)
+
+data class UpdateOnboardingStatusRequestDto(
+    @SerializedName("status") val status: String
 )
 
 data class ForgotPasswordRequestDto(

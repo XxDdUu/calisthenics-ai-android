@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.admin
 
+import com.calisthenics.ai.R
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -56,6 +58,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -96,6 +99,7 @@ fun AdminExercisesScreen(
     onBack: () -> Unit,
     onCreateExercise: () -> Unit,
     onEditExercise: (Long) -> Unit,
+    adminNavigation: AdminNavigationCallbacks = AdminNavigationCallbacks(onOverview = onBack),
     viewModel: AdminViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -123,46 +127,44 @@ fun AdminExercisesScreen(
         }
     }
 
+    AdminConsoleScaffold(
+        currentSection = AdminNavSection.EXERCISES,
+        title = stringResource(R.string.exercises),
+        subtitle = "Movement catalog & progressions",
+        navigation = adminNavigation,
+        onBack = onBack,
+        headerActions = {
+            IconButton(
+                onClick = {
+                    viewModel.loadExercises(0, search, categoryFilter, difficultyFilter, activeFilter)
+                },
+                modifier = Modifier.size(38.dp)
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.common_refresh))
+            }
+            Button(
+                onClick = onCreateExercise,
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(stringResource(R.string.common_add))
+            }
+        }
+    ) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(Ink)
-            .statusBarsPadding()
             .padding(horizontal = 16.dp)
-            .padding(top = 18.dp, bottom = 10.dp)
+            .padding(top = 12.dp, bottom = 10.dp)
     ) {
-        // Header
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                }
-                Text("Exercises", style = MaterialTheme.typography.titleLarge)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = {
-                    viewModel.loadExercises(0, search, categoryFilter, difficultyFilter, activeFilter)
-                }) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                }
-                Button(onClick = onCreateExercise) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Add")
-                }
-            }
-        }
 
         // Search Input
         OutlinedTextField(
             value = search,
             onValueChange = { search = it },
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            label = { Text("Search exercises by name, code, or muscle") },
+            label = { Text(stringResource(R.string.loc_search_exercises_by_name)) },
             singleLine = true
         )
 
@@ -174,7 +176,7 @@ fun AdminExercisesScreen(
             FilterChip(
                 selected = categoryFilter == null,
                 onClick = { categoryFilter = null },
-                label = { Text("All Categories") }
+                label = { Text(stringResource(R.string.loc_all_categories)) }
             )
             EXERCISE_CATEGORIES.forEach { cat ->
                 FilterChip(
@@ -192,7 +194,7 @@ fun AdminExercisesScreen(
             FilterChip(
                 selected = difficultyFilter == null,
                 onClick = { difficultyFilter = null },
-                label = { Text("All Difficulties") }
+                label = { Text(stringResource(R.string.loc_all_difficulties)) }
             )
             DIFFICULTY_LEVELS.forEach { diff ->
                 FilterChip(
@@ -210,17 +212,17 @@ fun AdminExercisesScreen(
             FilterChip(
                 selected = activeFilter == null,
                 onClick = { activeFilter = null },
-                label = { Text("All Status") }
+                label = { Text(stringResource(R.string.loc_all_status)) }
             )
             FilterChip(
                 selected = activeFilter == true,
                 onClick = { activeFilter = if (activeFilter == true) null else true },
-                label = { Text("Active") }
+                label = { Text(stringResource(R.string.loc_active)) }
             )
             FilterChip(
                 selected = activeFilter == false,
                 onClick = { activeFilter = if (activeFilter == false) null else false },
-                label = { Text("Inactive") }
+                label = { Text(stringResource(R.string.loc_inactive)) }
             )
         }
 
@@ -244,7 +246,7 @@ fun AdminExercisesScreen(
         if (page != null) {
             if (page.content.isEmpty() && !state.isLoading) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text("No exercises found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.loc_no_exercises_found), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
                 LazyColumn(
@@ -268,14 +270,15 @@ fun AdminExercisesScreen(
             Spacer(Modifier.weight(1f))
         }
     }
+    }
 
     // Delete / Deactivate Safety Dialog
     pendingDeleteExercise?.let { exercise ->
         if (exercise.canDelete) {
             AlertDialog(
                 onDismissRequest = { pendingDeleteExercise = null },
-                title = { Text("Delete exercise") },
-                text = { Text("Are you sure you want to permanently delete '${exercise.name}'? This cannot be undone.") },
+                title = { Text(stringResource(R.string.loc_delete_exercise)) },
+                text = { Text(stringResource(R.string.loc_admin_delete_exercise, exercise.name)) },
                 confirmButton = {
                     Button(
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
@@ -289,16 +292,16 @@ fun AdminExercisesScreen(
                                 onConflict = { conflictMessage = it }
                             )
                         }
-                    ) { Text("Delete") }
+                    ) { Text(stringResource(R.string.common_delete)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { pendingDeleteExercise = null }) { Text("Cancel") }
+                    TextButton(onClick = { pendingDeleteExercise = null }) { Text(stringResource(R.string.cancel)) }
                 }
             )
         } else {
             AlertDialog(
                 onDismissRequest = { pendingDeleteExercise = null },
-                title = { Text("Exercise in use") },
+                title = { Text(stringResource(R.string.loc_exercise_in_use)) },
                 text = {
                     Text(
                         "Cannot permanently delete '${exercise.name}' because it is referenced in " +
@@ -318,10 +321,10 @@ fun AdminExercisesScreen(
                                 onConflict = { conflictMessage = it }
                             )
                         }
-                    ) { Text("Deactivate instead") }
+                    ) { Text(stringResource(R.string.loc_deactivate_instead)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { pendingDeleteExercise = null }) { Text("Cancel") }
+                    TextButton(onClick = { pendingDeleteExercise = null }) { Text(stringResource(R.string.cancel)) }
                 }
             )
         }
@@ -331,10 +334,10 @@ fun AdminExercisesScreen(
     conflictMessage?.let { msg ->
         AlertDialog(
             onDismissRequest = { conflictMessage = null },
-            title = { Text("Cannot delete") },
+            title = { Text(stringResource(R.string.loc_cannot_delete)) },
             text = { Text(msg) },
             confirmButton = {
-                Button(onClick = { conflictMessage = null }) { Text("OK") }
+                Button(onClick = { conflictMessage = null }) { Text(stringResource(R.string.loc_ok)) }
             }
         )
     }
@@ -451,10 +454,10 @@ private fun AdminExerciseCard(
                     Text(if (exercise.active) "Deactivate" else "Activate")
                 }
                 IconButton(onClick = onEdit) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.common_edit), tint = MaterialTheme.colorScheme.primary)
                 }
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.common_delete), tint = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -547,7 +550,7 @@ fun AdminExerciseFormScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.common_back))
             }
             Text(
                 if (isEditMode) "Edit Exercise" else "Create Exercise",
@@ -560,7 +563,7 @@ fun AdminExerciseFormScreen(
         }
 
         // Basic Information Section
-        Text("Basic Information", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.loc_basic_information), style = MaterialTheme.typography.titleMedium)
 
         OutlinedTextField(
             value = name,
@@ -569,7 +572,7 @@ fun AdminExerciseFormScreen(
                 if (it.isNotBlank()) nameError = null
             },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Exercise name *") },
+            label = { Text(stringResource(R.string.loc_exercise_name_required)) },
             isError = nameError != null,
             supportingText = nameError?.let { { Text(it) } },
             singleLine = true
@@ -579,15 +582,15 @@ fun AdminExerciseFormScreen(
             value = code,
             onValueChange = { code = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Code (optional)") },
-            supportingText = { Text("Leave empty to auto-generate from name") },
+            label = { Text(stringResource(R.string.loc_code_optional)) },
+            supportingText = { Text(stringResource(R.string.loc_leave_empty_autocode)) },
             singleLine = true
         )
 
         // Classification Section
-        Text("Classification", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.loc_classification), style = MaterialTheme.typography.titleMedium)
 
-        Text("Category *", style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.loc_category_required), style = MaterialTheme.typography.bodyMedium)
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -601,7 +604,7 @@ fun AdminExerciseFormScreen(
             }
         }
 
-        Text("Difficulty Level *", style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.loc_difficulty_required), style = MaterialTheme.typography.bodyMedium)
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -619,8 +622,8 @@ fun AdminExerciseFormScreen(
             value = targetMuscles,
             onValueChange = { targetMuscles = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Target muscles") },
-            placeholder = { Text("e.g. Chest, Anterior Deltoids, Triceps") },
+            label = { Text(stringResource(R.string.loc_target_muscles)) },
+            placeholder = { Text(stringResource(R.string.loc_example_target_muscles)) },
             singleLine = true
         )
 
@@ -628,19 +631,19 @@ fun AdminExerciseFormScreen(
             value = equipment,
             onValueChange = { equipment = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Equipment") },
-            placeholder = { Text("e.g. Pull-up bar, Parallettes, None") },
+            label = { Text(stringResource(R.string.loc_equipment)) },
+            placeholder = { Text(stringResource(R.string.loc_example_equipment)) },
             singleLine = true
         )
 
         // Description & Instructions
-        Text("Details & Execution", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.loc_details_execution), style = MaterialTheme.typography.titleMedium)
 
         OutlinedTextField(
             value = description,
             onValueChange = { description = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Description") },
+            label = { Text(stringResource(R.string.loc_description)) },
             minLines = 2,
             maxLines = 4
         )
@@ -649,13 +652,13 @@ fun AdminExerciseFormScreen(
             value = instructions,
             onValueChange = { instructions = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Execution steps & instructions") },
+            label = { Text(stringResource(R.string.loc_execution_instructions)) },
             minLines = 3,
             maxLines = 6
         )
 
         // Media Section
-        Text("Media", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.loc_media), style = MaterialTheme.typography.titleMedium)
 
         ImageSelectorSection(
             currentImageUrl = imageUrl.ifBlank { null },
@@ -735,9 +738,9 @@ fun AdminExerciseFormScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text("Active status", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.loc_active_status), style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "Inactive exercises are hidden from client workouts but preserved in history",
+                    stringResource(R.string.loc_inactive_exercises_description),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -827,8 +830,8 @@ private fun AdminPageControls(page: AdminPage<*>, onPageChange: (Int) -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        TextButton(enabled = page.page > 0, onClick = { onPageChange(page.page - 1) }) { Text("Previous") }
-        Text("${page.page + 1} / ${page.totalPages.coerceAtLeast(1)}")
-        TextButton(enabled = page.hasNext, onClick = { onPageChange(page.page + 1) }) { Text("Next") }
+        TextButton(enabled = page.page > 0, onClick = { onPageChange(page.page - 1) }) { Text(stringResource(R.string.common_previous)) }
+        Text(stringResource(R.string.loc_page_count, page.page + 1, page.totalPages.coerceAtLeast(1)))
+        TextButton(enabled = page.hasNext, onClick = { onPageChange(page.page + 1) }) { Text(stringResource(R.string.common_next)) }
     }
 }

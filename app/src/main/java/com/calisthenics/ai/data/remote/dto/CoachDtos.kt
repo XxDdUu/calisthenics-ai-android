@@ -25,7 +25,10 @@ data class CoachProfileDto(
     @SerializedName("assignedPlansCount") val assignedPlansCount: Long? = null,
     @SerializedName("connectionStatus") val connectionStatus: String? = null,
     @SerializedName("relationshipId") val relationshipId: Long? = null,
-    @SerializedName("conversationId") val conversationId: Long? = null
+    @SerializedName("conversationId") val conversationId: Long? = null,
+    @SerializedName("gender") val gender: String? = null,
+    @SerializedName("averageRating") val averageRating: Double? = null,
+    @SerializedName("reviewCount") val reviewCount: Long? = null
 )
 
 data class CoachProfileRequestDto(
@@ -40,7 +43,8 @@ data class CoachProfileRequestDto(
     @SerializedName("certifications") val certifications: String? = null,
     @SerializedName("socialLinks") val socialLinks: String? = null,
     @SerializedName("isPublic") val isPublic: Boolean? = null,
-    @SerializedName("isAcceptingClients") val isAcceptingClients: Boolean? = null
+    @SerializedName("isAcceptingClients") val isAcceptingClients: Boolean? = null,
+    @SerializedName("gender") val gender: String? = null
 )
 
 data class CreateClientCoachRequestDto(

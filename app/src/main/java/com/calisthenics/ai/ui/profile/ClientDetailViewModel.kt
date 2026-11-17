@@ -3,8 +3,12 @@ package com.calisthenics.ai.ui.profile
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.calisthenics.ai.data.local.AccountSessionGuard
+import com.calisthenics.ai.data.local.AccountSessionManager
 import com.calisthenics.ai.domain.model.ClientProfile
 import com.calisthenics.ai.domain.model.ClientTrainingOverview
+import com.calisthenics.ai.domain.model.ProfileMediaItem
+import com.calisthenics.ai.domain.model.ProfileType
 import com.calisthenics.ai.domain.repository.ChatRepository
 import com.calisthenics.ai.domain.repository.CoachClientRepository
 import com.calisthenics.ai.domain.repository.ProfileRepository
@@ -23,6 +27,7 @@ data class ClientDetailUiState(
     val isTerminating: Boolean = false,
     val clientProfile: ClientProfile? = null,
     val trainingOverview: ClientTrainingOverview? = null,
+    val clientMedia: List<ProfileMediaItem> = emptyList(),
     val activeRelationshipId: Long? = null,
     val error: String? = null,
     val isForbidden: Boolean = false
@@ -33,7 +38,8 @@ class ClientDetailViewModel @Inject constructor(
     private val profileRepository: ProfileRepository,
     private val coachClientRepository: CoachClientRepository,
     private val chatRepository: ChatRepository,
-    savedStateHandle: SavedStateHandle
+    savedStateHandle: SavedStateHandle,
+    private val accountSessionManager: AccountSessionManager = AccountSessionManager()
 ) : ViewModel() {
 
     private val clientId: Long = checkNotNull(savedStateHandle.get<Long>("clientId"))
@@ -41,16 +47,26 @@ class ClientDetailViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ClientDetailUiState(isLoading = true))
     val uiState: StateFlow<ClientDetailUiState> = _uiState.asStateFlow()
 
+    private val sessionGuard = AccountSessionGuard(
+        parentScope = viewModelScope,
+        sessionManager = accountSessionManager,
+        onSessionCleared = { _uiState.value = ClientDetailUiState(isLoading = false) },
+        onSessionActive = { load() }
+    )
+
     init {
+        sessionGuard.startObserving()
         load()
     }
 
     fun load() {
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             _uiState.update { it.copy(isLoading = true, error = null, isForbidden = false) }
 
             val profileResult = profileRepository.getClientProfile(clientId)
             val overviewResult = profileRepository.getClientOverview(clientId)
+            val mediaResult = profileRepository.getProfileMedia(clientId, ProfileType.ATHLETE)
+            if (!sessionGuard.isCurrentSession(captured)) return@launchScoped
 
             if (profileResult.isSuccess) {
                 val profile = profileResult.getOrNull()
@@ -62,6 +78,7 @@ class ClientDetailViewModel @Inject constructor(
                         isLoading = false,
                         clientProfile = profile,
                         trainingOverview = overviewResult.getOrNull(),
+                        clientMedia = mediaResult.getOrDefault(emptyList()),
                         activeRelationshipId = relId,
                         error = null,
                         isForbidden = false

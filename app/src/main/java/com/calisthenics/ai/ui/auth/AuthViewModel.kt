@@ -3,6 +3,7 @@ package com.calisthenics.ai.ui.auth
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.calisthenics.ai.data.local.AccountSessionManager
 import com.calisthenics.ai.data.local.SessionManager
 import com.calisthenics.ai.data.remote.mapper.AuthErrorMapper
 import com.calisthenics.ai.data.remote.websocket.ChatWebSocketClient
@@ -48,7 +49,8 @@ class AuthViewModel @Inject constructor(
     private val repository: AuthRepository,
     sessionManager: SessionManager? = null,
     private val chatWebSocketClient: ChatWebSocketClient? = null,
-    private val googleAuthManager: GoogleAuthManager? = null
+    private val googleAuthManager: GoogleAuthManager? = null,
+    private val accountSessionManager: AccountSessionManager = AccountSessionManager()
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(createInitialState())
@@ -90,6 +92,32 @@ class AuthViewModel @Inject constructor(
                             error = "Session expired. Please sign in again."
                         )
                     }
+                }
+            }
+        }
+        viewModelScope.launch {
+            var lastSession = accountSessionManager.currentSession()
+            accountSessionManager.sessionState.collect { session ->
+                if (session.generation == lastSession.generation && session.activeUserId == lastSession.activeUserId) {
+                    return@collect
+                }
+                lastSession = session
+                val userId = session.activeUserId
+                if (session.isAuthenticated && userId != null) {
+                    val role = session.role ?: repository.getUserRole()
+                    _state.value = AuthUiState(
+                        authState = AuthState.Authenticated(userId, role, repository.getUserEmail()),
+                        authenticated = true,
+                        role = role,
+                        savedAccounts = repository.getSavedAccounts()
+                    )
+                } else if (_state.value.authState !is AuthState.SwitchingAccount) {
+                    _state.value = AuthUiState(
+                        authState = AuthState.Unauthenticated,
+                        authenticated = false,
+                        role = null,
+                        savedAccounts = repository.getSavedAccounts()
+                    )
                 }
             }
         }
@@ -140,10 +168,14 @@ class AuthViewModel @Inject constructor(
     }
 
     fun loginWithGoogle(idToken: String, requestId: String = "") {
+        loginWithFirebase(idToken, requestId)
+    }
+
+    fun loginWithFirebase(idToken: String, requestId: String = "") {
         viewModelScope.launch {
-            Log.d(TAG, "[$requestId] BACKEND_REQUEST_STARTED")
+            Log.d(TAG, "[$requestId] BACKEND_FIREBASE_REQUEST_STARTED")
             _state.update { it.copy(loading = true, error = null, authState = AuthState.Loading) }
-            repository.loginWithGoogle(idToken)
+            repository.loginWithFirebase(idToken)
                 .onSuccess { token ->
                     Log.d(TAG, "[$requestId] BACKEND_RESPONSE_SUCCESS (userId=${token.userId}, role=${token.role})")
                     Log.d(TAG, "[$requestId] SIGN_IN_FINISHED (status=Success)")
@@ -220,6 +252,7 @@ class AuthViewModel @Inject constructor(
     fun initiateSwitchAccount() {
         chatWebSocketClient?.disconnect()
         repository.deactivateActiveSession()
+        viewModelScope.launch { googleAuthManager?.clearCredentialState() }
         val saved = repository.getSavedAccounts()
         _state.value = AuthUiState(
             authState = AuthState.SwitchingAccount,
@@ -241,6 +274,7 @@ class AuthViewModel @Inject constructor(
 
     fun prepareForAddAccount() {
         repository.deactivateActiveSession()
+        viewModelScope.launch { googleAuthManager?.clearCredentialState() }
         _state.update {
             it.copy(
                 authState = AuthState.SwitchingAccount,

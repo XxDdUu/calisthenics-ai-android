@@ -5,10 +5,14 @@ import androidx.room.Index
 
 @Entity(
     tableName = "cached_workout_plan_days",
-    primaryKeys = ["planId", "dayOfWeek"],
-    indices = [Index(value = ["planId"]), Index(value = ["planId", "id"])]
+    primaryKeys = ["ownerUserId", "planId", "dayOfWeek"],
+    indices = [
+        Index(value = ["ownerUserId", "planId"]),
+        Index(value = ["ownerUserId", "planId", "id"])
+    ]
 )
 data class CachedWorkoutPlanDayEntity(
+    val ownerUserId: Long,
     val id: Long,
     val planId: Long,
     val dayOfWeek: String, // e.g. MONDAY, TUESDAY

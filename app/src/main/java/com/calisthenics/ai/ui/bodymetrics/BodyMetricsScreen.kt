@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.bodymetrics
 
+import com.calisthenics.ai.R
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -19,6 +21,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -59,7 +62,7 @@ fun BodyMetricsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Body Metrics Tracking",
+                        stringResource(R.string.loc_body_metrics_tracking),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryText
@@ -67,7 +70,7 @@ fun BodyMetricsScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PrimaryText)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back), tint = PrimaryText)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)
@@ -106,7 +109,7 @@ fun BodyMetricsScreen(
                                 ) {
                                     Icon(Icons.Default.MonitorWeight, contentDescription = null, tint = Accent)
                                     Text(
-                                        "Current Status",
+                                        stringResource(R.string.loc_current_status),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = PrimaryText
@@ -115,7 +118,7 @@ fun BodyMetricsScreen(
 
                                 state.currentMetrics?.measuredAt?.let { ts ->
                                     PillBadge(
-                                        text = "Updated: ${ts.take(10)}",
+                                        text = stringResource(R.string.loc_updated_date, ts.take(10)),
                                         isAccent = false
                                     )
                                 }
@@ -126,13 +129,13 @@ fun BodyMetricsScreen(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 StatCard(
-                                    label = "Height",
-                                    value = state.currentHeightCm?.let { "$it cm" } ?: "Not set",
+                                    label = stringResource(R.string.loc_height),
+                                    value = state.currentHeightCm?.let { "$it cm" } ?: stringResource(R.string.loc_not_set),
                                     modifier = Modifier.weight(1f)
                                 )
                                 StatCard(
-                                    label = "Latest Weight",
-                                    value = state.latestWeightKg?.let { "$it kg" } ?: "Not recorded",
+                                    label = stringResource(R.string.latest_weight),
+                                    value = state.latestWeightKg?.let { "$it kg" } ?: stringResource(R.string.loc_not_recorded),
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -148,7 +151,7 @@ fun BodyMetricsScreen(
                                 ) {
                                     Icon(Icons.Default.Height, contentDescription = null, modifier = Modifier.size(16.dp), tint = Accent)
                                     Spacer(Modifier.width(6.dp))
-                                    Text("Edit Height")
+                                    Text(stringResource(R.string.edit_height))
                                 }
 
                                 Button(
@@ -159,7 +162,7 @@ fun BodyMetricsScreen(
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(Modifier.width(6.dp))
-                                    Text("Record Entry")
+                                    Text(stringResource(R.string.record_entry))
                                 }
                             }
                         }
@@ -170,7 +173,7 @@ fun BodyMetricsScreen(
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
-                            "Progress Trends",
+                            stringResource(R.string.loc_progress_trends),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = PrimaryText
@@ -187,7 +190,7 @@ fun BodyMetricsScreen(
                                 FilterChip(
                                     selected = state.selectedMetricType == metric,
                                     onClick = { viewModel.selectMetricType(metric) },
-                                    label = { Text("${metric.displayName} (${metric.unit})") }
+                                    label = { Text(stringResource(R.string.loc_metric_label, metric.displayName, metric.unit)) }
                                 )
                             }
                         }
@@ -198,7 +201,7 @@ fun BodyMetricsScreen(
                                 selectedFilter = state.selectedTimeFilter,
                                 onFilterSelected = { viewModel.selectTimeFilter(it) },
                                 unit = state.selectedMetricType.unit,
-                                title = "${state.selectedMetricType.displayName} Progress"
+                                title = stringResource(R.string.loc_progress_named_title, state.selectedMetricType.displayName)
                             )
                         } else {
                             DarkCard(Modifier.fillMaxWidth()) {
@@ -209,7 +212,7 @@ fun BodyMetricsScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        "No ${state.selectedMetricType.displayName.lowercase()} measurements recorded for this period.",
+                                        stringResource(R.string.loc_no_measurements_period, state.selectedMetricType.displayName.lowercase()),
                                         color = SecondaryText,
                                         style = MaterialTheme.typography.bodyMedium
                                     )
@@ -222,7 +225,7 @@ fun BodyMetricsScreen(
                 // Measurement History List Header
                 item {
                     Text(
-                        "Measurement History (${state.history.size})",
+                        stringResource(R.string.loc_measurement_history_count, state.history.size),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryText
@@ -232,9 +235,9 @@ fun BodyMetricsScreen(
                 if (state.history.isEmpty()) {
                     item {
                         EmptyState(
-                            title = "No measurements recorded",
-                            body = "Record your weight and circumference measurements to track your body changes over time.",
-                            action = "Record Entry",
+                            title = stringResource(R.string.no_measurements),
+                            body = stringResource(R.string.loc_body_tracking_description),
+                            action = stringResource(R.string.record_entry),
                             onAction = { viewModel.openAddRecordDialog() }
                         )
                     }
@@ -293,18 +296,18 @@ private fun MeasurementHistoryItem(
                     color = PrimaryText
                 )
                 PillBadge(
-                    text = "${measurement.weightKg} kg",
+                    text = stringResource(R.string.loc_weight_kg_value, measurement.weightKg.toString()),
                     isAccent = true
                 )
             }
 
             // Optional metrics chips
             val optionalDetails = listOfNotNull(
-                measurement.bodyFatPercentage?.let { "Body Fat: $it%" },
-                measurement.waistCm?.let { "Waist: $it cm" },
-                measurement.chestCm?.let { "Chest: $it cm" },
-                measurement.armCm?.let { "Arm: $it cm" },
-                measurement.thighCm?.let { "Thigh: $it cm" }
+                measurement.bodyFatPercentage?.let { stringResource(R.string.loc_body_fat_label, it.toString()) },
+                measurement.waistCm?.let { stringResource(R.string.loc_waist_label, it.toString()) },
+                measurement.chestCm?.let { stringResource(R.string.loc_chest_label, it.toString()) },
+                measurement.armCm?.let { stringResource(R.string.loc_arm_label, it.toString()) },
+                measurement.thighCm?.let { stringResource(R.string.loc_thigh_label, it.toString()) }
             )
 
             if (optionalDetails.isNotEmpty()) {
@@ -358,7 +361,7 @@ private fun RecordMeasurementDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    "Record Body Measurement",
+                    stringResource(R.string.loc_record_body_measurement),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = PrimaryText
@@ -367,7 +370,7 @@ private fun RecordMeasurementDialog(
                 OutlinedTextField(
                     value = weightStr,
                     onValueChange = { weightStr = it },
-                    label = { Text("Weight (kg) *") },
+                    label = { Text(stringResource(R.string.weight_kg_required)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -380,7 +383,7 @@ private fun RecordMeasurementDialog(
                 OutlinedTextField(
                     value = dateStr,
                     onValueChange = { dateStr = it },
-                    label = { Text("Date (YYYY-MM-DD)") },
+                    label = { Text(stringResource(R.string.date_yyyy_mm_dd)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -397,7 +400,7 @@ private fun RecordMeasurementDialog(
                     OutlinedTextField(
                         value = bodyFatStr,
                         onValueChange = { bodyFatStr = it },
-                        label = { Text("Body Fat %") },
+                        label = { Text(stringResource(R.string.body_fat_percent)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f),
                         singleLine = true
@@ -405,7 +408,7 @@ private fun RecordMeasurementDialog(
                     OutlinedTextField(
                         value = waistStr,
                         onValueChange = { waistStr = it },
-                        label = { Text("Waist (cm)") },
+                        label = { Text(stringResource(R.string.waist_cm)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f),
                         singleLine = true
@@ -419,7 +422,7 @@ private fun RecordMeasurementDialog(
                     OutlinedTextField(
                         value = chestStr,
                         onValueChange = { chestStr = it },
-                        label = { Text("Chest (cm)") },
+                        label = { Text(stringResource(R.string.chest_cm)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f),
                         singleLine = true
@@ -427,7 +430,7 @@ private fun RecordMeasurementDialog(
                     OutlinedTextField(
                         value = armStr,
                         onValueChange = { armStr = it },
-                        label = { Text("Arm (cm)") },
+                        label = { Text(stringResource(R.string.arm_cm)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f),
                         singleLine = true
@@ -437,7 +440,7 @@ private fun RecordMeasurementDialog(
                 OutlinedTextField(
                     value = thighStr,
                     onValueChange = { thighStr = it },
-                    label = { Text("Thigh (cm)") },
+                    label = { Text(stringResource(R.string.thigh_cm)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -451,7 +454,7 @@ private fun RecordMeasurementDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss, enabled = !isSaving) {
-                        Text("Cancel", color = SecondaryText)
+                        Text(stringResource(R.string.cancel), color = SecondaryText)
                     }
                     Spacer(Modifier.width(8.dp))
                     Button(
@@ -472,7 +475,7 @@ private fun RecordMeasurementDialog(
                         if (isSaving) {
                             CircularProgressIndicator(Modifier.size(16.dp), color = Ink, strokeWidth = 2.dp)
                         } else {
-                            Text("Save")
+                            Text(stringResource(R.string.common_save))
                         }
                     }
                 }
@@ -503,7 +506,7 @@ private fun EditHeightDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    "Update Height",
+                    stringResource(R.string.loc_update_height),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = PrimaryText
@@ -512,7 +515,7 @@ private fun EditHeightDialog(
                 OutlinedTextField(
                     value = heightStr,
                     onValueChange = { heightStr = it },
-                    label = { Text("Height (cm) *") },
+                    label = { Text(stringResource(R.string.height_cm_required)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -528,7 +531,7 @@ private fun EditHeightDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss, enabled = !isSaving) {
-                        Text("Cancel", color = SecondaryText)
+                        Text(stringResource(R.string.cancel), color = SecondaryText)
                     }
                     Spacer(Modifier.width(8.dp))
                     Button(
@@ -539,7 +542,7 @@ private fun EditHeightDialog(
                         if (isSaving) {
                             CircularProgressIndicator(Modifier.size(16.dp), color = Ink, strokeWidth = 2.dp)
                         } else {
-                            Text("Update")
+                            Text(stringResource(R.string.common_update))
                         }
                     }
                 }

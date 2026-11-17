@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -37,16 +38,26 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
+import com.calisthenics.ai.R
 import com.calisthenics.ai.data.network.ConnectivityMonitor
 import com.calisthenics.ai.data.network.OfflineAccessPolicy
 import com.calisthenics.ai.domain.model.WorkoutDayOfWeek
 import com.calisthenics.ai.domain.model.WorkoutSession
+import com.calisthenics.ai.ui.components.GenderOnboardingDialog
 import com.calisthenics.ai.ui.components.OfflineBanner
+import com.calisthenics.ai.ui.workoutsession.bubble.UnfinishedWorkoutBubbleHost
 import com.calisthenics.ai.ui.analysis.AnalysisResultScreen
+import com.calisthenics.ai.ui.admin.AdminGettingStartedProgramScreen
+import com.calisthenics.ai.ui.admin.AdminAiAgentScreen
 import com.calisthenics.ai.ui.admin.AdminDashboardScreen
 import com.calisthenics.ai.ui.admin.AdminExerciseFormScreen
 import com.calisthenics.ai.ui.admin.AdminExercisesScreen
+import com.calisthenics.ai.ui.admin.AdminNavigationCallbacks
+import com.calisthenics.ai.ui.admin.AdminReviewDetailScreen
+import com.calisthenics.ai.ui.admin.AdminReviewsScreen
 import com.calisthenics.ai.ui.admin.AdminUserDetailScreen
+import com.calisthenics.ai.ui.admin.AdminUserReportDetailScreen
+import com.calisthenics.ai.ui.admin.AdminUserReportsScreen
 import com.calisthenics.ai.ui.admin.AdminUsersScreen
 import com.calisthenics.ai.ui.admin.AdminViewModel
 import com.calisthenics.ai.ui.admin.AdminWorkoutPlanDetailScreen
@@ -62,22 +73,30 @@ import com.calisthenics.ai.ui.auth.RegisterOtpVerificationScreen
 import com.calisthenics.ai.ui.auth.ResetPasswordScreen
 import com.calisthenics.ai.ui.chat.conversation.ChatConversationScreen
 import com.calisthenics.ai.ui.chat.list.ChatListScreen
+import com.calisthenics.ai.ui.chat.ai.AiChatScreen
 import com.calisthenics.ai.ui.coach.ClientProgressScreen
 import com.calisthenics.ai.ui.coach.CoachConnectionsScreen
 import com.calisthenics.ai.ui.coach.CoachConnectionsViewModel
 import com.calisthenics.ai.ui.coach.CoachProfileScreen
 import com.calisthenics.ai.ui.exercise.ExerciseProgressScreen
 import com.calisthenics.ai.ui.exercise.ExerciseSelectionScreen
+import com.calisthenics.ai.ui.liveanalysis.LiveAnalysisHistoryDetailScreen
+import com.calisthenics.ai.ui.liveanalysis.LiveAnalysisHistoryScreen
 import com.calisthenics.ai.ui.liveanalysis.LiveAnalysisScreen
+import com.calisthenics.ai.ui.liveanalysis.WorkoutAnalysisSummaryScreen
 import com.calisthenics.ai.ui.main.HomeDashboard
+import com.calisthenics.ai.ui.notifications.NotificationNavigationTarget
+import com.calisthenics.ai.ui.notifications.NotificationsScreen
 import com.calisthenics.ai.ui.bodymetrics.BodyMetricsScreen
 import com.calisthenics.ai.ui.pr.PersonalRecordsScreen
 import com.calisthenics.ai.ui.profile.ClientDetailScreen
+import com.calisthenics.ai.ui.profile.GenderGateViewModel
 import com.calisthenics.ai.ui.profile.ProfileScreen
 import com.calisthenics.ai.ui.progression.ProgressionSelectionScreen
 import com.calisthenics.ai.ui.settings.SettingsScreen
 import com.calisthenics.ai.ui.training.TrainingAnalyticsScreen
 import com.calisthenics.ai.ui.video.VideoSelectionScreen
+import com.calisthenics.ai.ui.workoutplan.ai.AiWorkoutPlannerScreen
 import com.calisthenics.ai.ui.workoutplan.details.WorkoutPlanDetailsScreen
 import com.calisthenics.ai.ui.workoutplan.list.WorkoutPlanListScreen
 import com.calisthenics.ai.ui.workoutsession.WorkoutHistoryScreen
@@ -96,6 +115,8 @@ sealed class Screen(val route: String) {
     data object Home : Screen("home")
     data object AuthenticatedEntry : Screen("authenticated_entry")
     data object AdminDashboard : Screen("admin/dashboard")
+    data object AdminAiAgent : Screen("admin/ai-agent")
+    data object AdminGettingStartedProgram : Screen("admin/getting-started-program")
     data object AdminUsers : Screen("admin/users")
     data object AdminUserDetails : Screen("admin/users/{userId}") {
         fun createRoute(userId: Long) = "admin/users/$userId"
@@ -113,6 +134,14 @@ sealed class Screen(val route: String) {
     data object AdminWorkoutSessionDetails : Screen("admin/workout-sessions/{sessionId}") {
         fun createRoute(sessionId: Long) = "admin/workout-sessions/$sessionId"
     }
+    data object AdminReviews : Screen("admin/reviews")
+    data object AdminReviewDetails : Screen("admin/reviews/{reviewId}") {
+        fun createRoute(reviewId: Long) = "admin/reviews/$reviewId"
+    }
+    data object AdminUserReports : Screen("admin/user-reports")
+    data object AdminUserReportDetails : Screen("admin/user-reports/{reportId}") {
+        fun createRoute(reportId: Long) = "admin/user-reports/$reportId"
+    }
     data object Training : Screen("training")
     data object Analysis : Screen("analysis")
     data object Coach : Screen("coach")
@@ -123,6 +152,15 @@ sealed class Screen(val route: String) {
         fun createRoute(clientId: Long) = "client/$clientId"
     }
     data object Chat : Screen("chat")
+    data object AiChat : Screen("ai_chat?conversationId={conversationId}") {
+        fun createRoute(conversationId: Long? = null): String {
+            return if (conversationId != null && conversationId > 0L) {
+                "ai_chat?conversationId=$conversationId"
+            } else {
+                "ai_chat"
+            }
+        }
+    }
     data object ChatConversation : Screen("chat/{conversationId}?otherUserName={otherUserName}&otherUserAvatarUrl={otherUserAvatarUrl}&otherUserId={otherUserId}") {
         fun createRoute(
             conversationId: Long,
@@ -145,9 +183,16 @@ sealed class Screen(val route: String) {
     data object LiveAnalysis : Screen("live_analysis/{exerciseCode}") {
         fun createRoute(code: String) = "live_analysis/$code"
     }
-    data object WorkoutPlanDetails : Screen("workout_plan_details/{planId}/{dayOfWeek}") {
-        fun createRoute(planId: Long, dayOfWeek: WorkoutDayOfWeek = WorkoutDayOfWeek.MONDAY) =
+    data object WorkoutPlanDetails : Screen("workout_plan_details/{planId}/{dayOfWeek}?startDate={startDate}") {
+        fun createRoute(
+            planId: Long,
+            dayOfWeek: WorkoutDayOfWeek = WorkoutDayOfWeek.MONDAY,
+            startDate: String? = null
+        ) = if (startDate.isNullOrBlank()) {
             "workout_plan_details/$planId/${dayOfWeek.name}"
+        } else {
+            "workout_plan_details/$planId/${dayOfWeek.name}?startDate=${java.net.URLEncoder.encode(startDate, "UTF-8")}"
+        }
     }
     data object WorkoutSession : Screen(
         "workout_session/{workoutId}/{date}/{planId}/{dayId}?sessionId={sessionId}&assignmentId={assignmentId}"
@@ -166,14 +211,29 @@ sealed class Screen(val route: String) {
             ).takeIf { it.isNotEmpty() }?.joinToString("&", prefix = "?").orEmpty()
     }
     data object WorkoutHistory : Screen("workout_history")
+    data object LiveAnalysisHistory : Screen("live_analysis_history")
+    data object LiveAnalysisHistoryDetail : Screen("live_analysis_history/{sessionId}") {
+        fun createRoute(sessionId: String) = "live_analysis_history/$sessionId"
+    }
+    data object WorkoutAnalysisSummary : Screen("workout_analysis_summary/{sessionId}") {
+        fun createRoute(sessionId: String) = "workout_analysis_summary/$sessionId"
+    }
     data object WorkoutSummary : Screen("workout_summary/{sessionId}") {
         fun createRoute(sessionId: Long) = "workout_summary/$sessionId"
     }
     data object ProgressionSelection : Screen("progression_selection/{exerciseCode}") {
         fun createRoute(code: String) = "progression_selection/$code"
     }
-    data object VideoSelection : Screen("video_selection/{exerciseId}/{progressionName}") {
-        fun createRoute(id: Long, name: String) = "video_selection/$id/${java.net.URLEncoder.encode(name, "UTF-8")}"
+    data object VideoSelection : Screen("video_selection/{exerciseId}/{progressionName}?exerciseCode={exerciseCode}") {
+        fun createRoute(id: Long, name: String, exerciseCode: String = ""): String {
+            val encodedName = java.net.URLEncoder.encode(name, "UTF-8")
+            return if (exerciseCode.isNotBlank()) {
+                val encodedCode = java.net.URLEncoder.encode(exerciseCode, "UTF-8")
+                "video_selection/$id/$encodedName?exerciseCode=$encodedCode"
+            } else {
+                "video_selection/$id/$encodedName"
+            }
+        }
     }
     data object AnalysisResult : Screen("analysis_result/{analysisId}") {
         fun createRoute(id: Long) = "analysis_result/$id"
@@ -183,11 +243,22 @@ sealed class Screen(val route: String) {
     }
     data object TrainingAnalytics : Screen("training_analytics")
     data object PersonalRecords : Screen("personal_records")
-    data object ClientProgress : Screen("coach/client_progress/{clientId}") {
-        fun createRoute(clientId: Long) = "coach/client_progress/$clientId"
+    data object ClientProgress : Screen("coach/client_progress/{clientId}?initialTab={initialTab}") {
+        fun createRoute(clientId: Long, initialTab: Int = 0) =
+            "coach/client_progress/$clientId?initialTab=$initialTab"
     }
     data object BodyMetrics : Screen("body_metrics")
     data object Settings : Screen("settings")
+    data object Notifications : Screen("notifications")
+    data object AiWorkoutPlanner : Screen("ai_workout_planner?clientId={clientId}&clientName={clientName}") {
+        fun createRoute(clientId: Long? = null, clientName: String? = null): String {
+            val params = listOfNotNull(
+                clientId?.let { "clientId=$it" },
+                clientName?.let { "clientName=${java.net.URLEncoder.encode(it, "UTF-8")}" }
+            )
+            return if (params.isNotEmpty()) "ai_workout_planner?${params.joinToString("&")}" else "ai_workout_planner"
+        }
+    }
 }
 
 private const val AuthenticatedGraph = "authenticated"
@@ -218,20 +289,6 @@ fun NavGraph(
     val isOnline by (connectivityMonitor?.isOnline?.collectAsState(initial = connectivityMonitor.isConnected())
         ?: remember { mutableStateOf(true) })
 
-    sessionManager?.let { sm ->
-        LaunchedEffect(sm) {
-            sm.sessionExpiredEvent.collect {
-                if (hasValidSession()) return@collect
-                navController.navigate(Screen.Auth.route) {
-                    popUpTo(0) { inclusive = true }
-                }
-            }
-        }
-    }
-
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
-
     val topLevelRoutes = remember {
         setOf(
             Screen.Home.route,
@@ -242,28 +299,116 @@ fun NavGraph(
             Screen.Profile.route
         )
     }
+
+    val clearUserSessionNavigationState = remember(navController, topLevelRoutes) {
+        {
+            topLevelRoutes.forEach { route -> runCatching { navController.clearBackStack(route) } }
+            runCatching { navController.clearBackStack(Screen.AdminDashboard.route) }
+            runCatching { navController.clearBackStack(AuthenticatedGraph) }
+        }
+    }
+
+    val performAdminLogout: () -> Unit = remember(navController, clearUserSessionNavigationState) {
+        {
+            clearUserSessionNavigationState()
+            navController.navigate(Screen.Auth.route) { popUpTo(0) { inclusive = true } }
+        }
+    }
+
+    val adminNavCallbacks = remember(navController, performAdminLogout) {
+        val navigateSection: (String) -> Unit = { route ->
+            if (route == Screen.AdminDashboard.route) {
+                navController.navigate(Screen.AdminDashboard.route) {
+                    popUpTo(Screen.AdminDashboard.route) { inclusive = false }
+                    launchSingleTop = true
+                }
+            } else {
+                navController.navigate(route) {
+                    popUpTo(Screen.AdminDashboard.route) { saveState = false }
+                    launchSingleTop = true
+                }
+            }
+        }
+        AdminNavigationCallbacks(
+            onOverview = { navigateSection(Screen.AdminDashboard.route) },
+            onAiAgent = { navigateSection(Screen.AdminAiAgent.route) },
+            onUsers = { navigateSection(Screen.AdminUsers.route) },
+            onExercises = { navigateSection(Screen.AdminExercises.route) },
+            onGettingStarted = { navigateSection(Screen.AdminGettingStartedProgram.route) },
+            onWorkoutPlans = { navigateSection(Screen.AdminWorkoutPlans.route) },
+            onWorkoutSessions = { navigateSection(Screen.AdminWorkoutSessions.route) },
+            onReviews = { navigateSection(Screen.AdminReviews.route) },
+            onUserReports = { navigateSection(Screen.AdminUserReports.route) },
+            onLogout = null
+        )
+    }
+
+    sessionManager?.let { sm ->
+        LaunchedEffect(sm) {
+            sm.sessionExpiredEvent.collect {
+                if (hasValidSession()) return@collect
+                clearUserSessionNavigationState()
+                navController.navigate(Screen.Auth.route) {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
+        }
+    }
+
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
     val isAuthenticatedRootRoute = currentRoute in topLevelRoutes ||
         currentRoute == Screen.AdminDashboard.route
 
-    val appGraphEntry = remember(navController, currentRoute) {
-        if (isAuthenticatedRootRoute) {
+    val isInsideAuthenticatedGraph = currentRoute != null &&
+        currentRoute != Screen.Splash.route &&
+        currentRoute != Screen.Auth.route &&
+        !currentRoute.startsWith("auth?") &&
+        currentRoute != Screen.VerifyRegisterOtp.route &&
+        !currentRoute.startsWith(Screen.PasswordResetGraph.route)
+
+    val authenticatedGraphEntry = remember(navController, currentRoute) {
+        if (isInsideAuthenticatedGraph) {
             runCatching { navController.getBackStackEntry(AuthenticatedGraph) }.getOrNull()
         } else {
             null
         }
     }
-    val authViewModel: AuthViewModel? = appGraphEntry?.let { hiltViewModel(it) }
+    val appGraphEntry = remember(navController, currentRoute, authenticatedGraphEntry) {
+        if (isAuthenticatedRootRoute) authenticatedGraphEntry else null
+    }
+    val authViewModel: AuthViewModel? = authenticatedGraphEntry?.let { hiltViewModel(it) }
     val authState = authViewModel?.state?.collectAsState()?.value
     val isAdmin = authState?.authenticated == true && authState.role == "ROLE_ADMIN"
     val showBottomBar = currentRoute in topLevelRoutes ||
         (currentRoute == Screen.AdminDashboard.route && isAdmin)
 
+    val genderGateViewModel: GenderGateViewModel? = authenticatedGraphEntry?.let { hiltViewModel(it) }
+    val genderGateState = genderGateViewModel?.uiState?.collectAsState()?.value
+
+    LaunchedEffect(genderGateViewModel, authState?.authenticated, isOnline) {
+        genderGateViewModel?.syncSession(
+            isAuthenticated = authState?.authenticated == true,
+            isOnline = isOnline
+        )
+    }
+
     val connectionsViewModel: CoachConnectionsViewModel? = appGraphEntry?.let { hiltViewModel(it) }
     val connectionsState by (connectionsViewModel?.uiState?.collectAsState() ?: remember { mutableStateOf(null) })
 
     val lifecycleOwner = LocalLifecycleOwner.current
-    LaunchedEffect(lifecycleOwner, connectionsViewModel) {
-        if (connectionsViewModel != null) {
+    LaunchedEffect(lifecycleOwner, genderGateViewModel, authState?.authenticated, isOnline) {
+        if (genderGateViewModel != null) {
+            lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                genderGateViewModel.retryVerificationIfNeeded(
+                    isAuthenticated = authState?.authenticated == true,
+                    isOnline = isOnline
+                )
+            }
+        }
+    }
+    LaunchedEffect(lifecycleOwner, connectionsViewModel, authState?.authenticated) {
+        if (connectionsViewModel != null && authState?.authenticated == true) {
             lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 while (true) {
                     delay(30_000L)
@@ -273,18 +418,16 @@ fun NavGraph(
         }
     }
 
-    val destinations = remember(isAdmin) {
-        visibleBottomNavigationScreens(if (isAdmin) "ROLE_ADMIN" else null).map { screen ->
-            screen to when (screen) {
-                Screen.Home -> Icons.Default.Home to "Home"
-                Screen.Training -> Icons.Default.FitnessCenter to "Training"
-                Screen.Analysis -> Icons.Default.AutoGraph to "AI Analysis"
-                Screen.Coach -> Icons.Default.Groups to "Coaching"
-                Screen.Chat -> Icons.Default.ChatBubble to "Chat"
-                Screen.Profile -> Icons.Default.Person to "Profile"
-                Screen.AdminDashboard -> Icons.Default.AdminPanelSettings to "Admin"
-                else -> error("Unexpected bottom navigation destination: ${screen.route}")
-            }
+    val destinations = visibleBottomNavigationScreens(if (isAdmin) "ROLE_ADMIN" else null).map { screen ->
+        screen to when (screen) {
+            Screen.Home -> Icons.Default.Home to stringResource(R.string.nav_home)
+            Screen.Training -> Icons.Default.FitnessCenter to stringResource(R.string.nav_training)
+            Screen.Analysis -> Icons.Default.AutoGraph to stringResource(R.string.nav_analysis)
+            Screen.Coach -> Icons.Default.Groups to stringResource(R.string.nav_coaching)
+            Screen.Chat -> Icons.Default.ChatBubble to stringResource(R.string.nav_chat)
+            Screen.Profile -> Icons.Default.Person to stringResource(R.string.nav_profile)
+            Screen.AdminDashboard -> Icons.Default.AdminPanelSettings to stringResource(R.string.nav_admin)
+            else -> error("Unexpected bottom navigation destination: ${screen.route}")
         }
     }
 
@@ -305,6 +448,9 @@ fun NavGraph(
             )
         }
     }
+
+    val offlineFeatureMessage = stringResource(R.string.feature_requires_internet)
+    val signInRequiredMessage = stringResource(R.string.sign_in_required)
 
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
@@ -344,7 +490,8 @@ fun NavGraph(
                 val isAddingAccount = backStackEntry.arguments?.getBoolean("isAddingAccount") == true
                 AuthScreen(
                     onAuthenticated = {
-                        navController.navigate(AuthenticatedGraph) { popUpTo(Screen.Auth.route) { inclusive = true } }
+                        clearUserSessionNavigationState()
+                        navController.navigate(AuthenticatedGraph) { popUpTo(0) { inclusive = true } }
                     },
                     onForgotPassword = {
                         navController.navigate(Screen.PasswordResetGraph.route) { launchSingleTop = true }
@@ -353,7 +500,7 @@ fun NavGraph(
                         navController.navigate(Screen.VerifyRegisterOtp.route) { launchSingleTop = true }
                     },
                     resetSuccessMessage = if (backStackEntry.arguments?.getBoolean("resetSuccess") == true) {
-                        "Mật khẩu đã được cập nhật. Vui lòng đăng nhập bằng mật khẩu mới."
+                        stringResource(R.string.password_updated)
                     } else {
                         null
                     },
@@ -371,8 +518,9 @@ fun NavGraph(
                 RegisterOtpVerificationScreen(
                     viewModel = authViewModel,
                     onVerified = {
+                        clearUserSessionNavigationState()
                         navController.navigate(AuthenticatedGraph) {
-                            popUpTo(Screen.Auth.route) { inclusive = true }
+                            popUpTo(0) { inclusive = true }
                         }
                     },
                     onBack = {
@@ -459,13 +607,39 @@ fun NavGraph(
                 composable(Screen.AdminDashboard.route) {
                     AdminOnlyRoute(navController) {
                         AdminDashboardScreen(
-                            onUsers = { navController.navigate(Screen.AdminUsers.route) },
-                            onExercises = { navController.navigate(Screen.AdminExercises.route) },
-                            onWorkoutPlans = { navController.navigate(Screen.AdminWorkoutPlans.route) },
-                            onWorkoutSessions = { navController.navigate(Screen.AdminWorkoutSessions.route) },
-                            onLogout = {
-                                navController.navigate(Screen.Auth.route) { popUpTo(0) }
-                            }
+                            onUsers = adminNavCallbacks.onUsers,
+                            onUserClick = { navController.navigate(Screen.AdminUserDetails.createRoute(it)) },
+                            onExercises = adminNavCallbacks.onExercises,
+                            onWorkoutPlans = adminNavCallbacks.onWorkoutPlans,
+                            onWorkoutSessions = adminNavCallbacks.onWorkoutSessions,
+                            onReviews = adminNavCallbacks.onReviews,
+                            onUserReports = adminNavCallbacks.onUserReports,
+                            onAdminAiAgent = adminNavCallbacks.onAiAgent,
+                            onGettingStartedProgram = adminNavCallbacks.onGettingStarted,
+                            onLogout = performAdminLogout,
+                            adminNavigation = withAdminLogout(adminNavCallbacks, performAdminLogout)
+                        )
+                    }
+                }
+                composable(Screen.AdminAiAgent.route) {
+                    AdminOnlyRoute(navController) {
+                        AdminAiAgentScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenExercise = { exerciseId ->
+                                navController.navigate(Screen.AdminEditExercise.createRoute(exerciseId))
+                            },
+                            onOpenWorkoutPlan = { planId ->
+                                navController.navigate(Screen.AdminWorkoutPlanDetails.createRoute(planId))
+                            },
+                            adminNavigation = withAdminLogout(adminNavCallbacks, performAdminLogout)
+                        )
+                    }
+                }
+                composable(Screen.AdminGettingStartedProgram.route) {
+                    AdminOnlyRoute(navController) {
+                        AdminGettingStartedProgramScreen(
+                            onBack = { navController.popBackStack() },
+                            adminNavigation = withAdminLogout(adminNavCallbacks, performAdminLogout)
                         )
                     }
                 }
@@ -474,7 +648,8 @@ fun NavGraph(
                         AdminExercisesScreen(
                             onBack = { navController.popBackStack() },
                             onCreateExercise = { navController.navigate(Screen.AdminCreateExercise.route) },
-                            onEditExercise = { navController.navigate(Screen.AdminEditExercise.createRoute(it)) }
+                            onEditExercise = { navController.navigate(Screen.AdminEditExercise.createRoute(it)) },
+                            adminNavigation = withAdminLogout(adminNavCallbacks, performAdminLogout)
                         )
                     }
                 }
@@ -502,7 +677,8 @@ fun NavGraph(
                     AdminOnlyRoute(navController) {
                         AdminUsersScreen(
                             onBack = { navController.popBackStack() },
-                            onUserClick = { navController.navigate(Screen.AdminUserDetails.createRoute(it)) }
+                            onUserClick = { navController.navigate(Screen.AdminUserDetails.createRoute(it)) },
+                            adminNavigation = withAdminLogout(adminNavCallbacks, performAdminLogout)
                         )
                     }
                 }
@@ -519,7 +695,8 @@ fun NavGraph(
                     AdminOnlyRoute(navController) {
                         AdminWorkoutPlansScreen(
                             onBack = { navController.popBackStack() },
-                            onPlanClick = { navController.navigate(Screen.AdminWorkoutPlanDetails.createRoute(it)) }
+                            onPlanClick = { navController.navigate(Screen.AdminWorkoutPlanDetails.createRoute(it)) },
+                            adminNavigation = withAdminLogout(adminNavCallbacks, performAdminLogout)
                         )
                     }
                 }
@@ -536,7 +713,8 @@ fun NavGraph(
                     AdminOnlyRoute(navController) {
                         AdminWorkoutSessionsScreen(
                             onBack = { navController.popBackStack() },
-                            onSessionClick = { navController.navigate(Screen.AdminWorkoutSessionDetails.createRoute(it)) }
+                            onSessionClick = { navController.navigate(Screen.AdminWorkoutSessionDetails.createRoute(it)) },
+                            adminNavigation = withAdminLogout(adminNavCallbacks, performAdminLogout)
                         )
                     }
                 }
@@ -549,12 +727,55 @@ fun NavGraph(
                         AdminWorkoutSessionDetailScreen(sessionId, onBack = { navController.popBackStack() })
                     }
                 }
-                composable(Screen.Home.route) {
+                composable(Screen.AdminReviews.route) {
+                    AdminOnlyRoute(navController) {
+                        AdminReviewsScreen(
+                            onBack = { navController.popBackStack() },
+                            onReviewClick = { navController.navigate(Screen.AdminReviewDetails.createRoute(it)) },
+                            adminNavigation = withAdminLogout(adminNavCallbacks, performAdminLogout)
+                        )
+                    }
+                }
+                composable(
+                    route = Screen.AdminReviewDetails.route,
+                    arguments = listOf(navArgument("reviewId") { type = NavType.LongType })
+                ) { backStackEntry ->
+                    val reviewId = requireNotNull(backStackEntry.arguments?.getLong("reviewId"))
+                    AdminOnlyRoute(navController) {
+                        AdminReviewDetailScreen(reviewId, onBack = { navController.popBackStack() })
+                    }
+                }
+                composable(Screen.AdminUserReports.route) {
+                    AdminOnlyRoute(navController) {
+                        AdminUserReportsScreen(
+                            onBack = { navController.popBackStack() },
+                            onReportClick = { navController.navigate(Screen.AdminUserReportDetails.createRoute(it)) },
+                            adminNavigation = withAdminLogout(adminNavCallbacks, performAdminLogout)
+                        )
+                    }
+                }
+                composable(
+                    route = Screen.AdminUserReportDetails.route,
+                    arguments = listOf(navArgument("reportId") { type = NavType.LongType })
+                ) { backStackEntry ->
+                    val reportId = requireNotNull(backStackEntry.arguments?.getLong("reportId"))
+                    AdminOnlyRoute(navController) {
+                        AdminUserReportDetailScreen(
+                            reportId = reportId,
+                            onBack = { navController.popBackStack() },
+                            onReportClick = { navController.navigate(Screen.AdminUserReportDetails.createRoute(it)) }
+                        )
+                    }
+                }
+                composable(Screen.Home.route) { backStackEntry ->
                     val context = LocalContext.current
+                    val openProgramFlag by backStackEntry.savedStateHandle
+                        .getStateFlow("open_program_details", false)
+                        .collectAsState()
                     HomeDashboard(
                         onAnalysis = {
                             if (!isOnline) {
-                                Toast.makeText(context, "AI Analysis requires an internet connection", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, offlineFeatureMessage, Toast.LENGTH_SHORT).show()
                             } else {
                                 navController.navigate(Screen.Analysis.route)
                             }
@@ -566,7 +787,7 @@ fun NavGraph(
                         },
                         onStartWorkout = { planId, dayId, date, assignmentId ->
                             if (!isOnline) {
-                                Toast.makeText(context, "Starting a live workout requires an internet connection", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, offlineFeatureMessage, Toast.LENGTH_SHORT).show()
                             } else {
                                 navController.navigate(
                                     Screen.WorkoutSession.createRoute(
@@ -581,14 +802,14 @@ fun NavGraph(
                         },
                         onWorkoutHistory = {
                             if (!isOnline) {
-                                Toast.makeText(context, "Workout history requires an internet connection", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, offlineFeatureMessage, Toast.LENGTH_SHORT).show()
                             } else {
                                 navController.navigate(Screen.WorkoutHistory.route)
                             }
                         },
                         onResumeWorkout = { session ->
                             if (!isOnline) {
-                                Toast.makeText(context, "Resuming a workout session requires an internet connection", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, offlineFeatureMessage, Toast.LENGTH_SHORT).show()
                             } else {
                                 navController.navigate(
                                     Screen.WorkoutSession.createRoute(
@@ -601,9 +822,63 @@ fun NavGraph(
                         },
                         onAnalytics = {
                             if (!isOnline) {
-                                Toast.makeText(context, "Analytics requires an internet connection", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, offlineFeatureMessage, Toast.LENGTH_SHORT).show()
                             } else {
                                 navController.navigate(Screen.TrainingAnalytics.route)
+                            }
+                        },
+                        onOpenAiPlanner = {
+                            if (!isOnline) {
+                                Toast.makeText(context, offlineFeatureMessage, Toast.LENGTH_SHORT).show()
+                            } else {
+                                navController.navigate(Screen.AiWorkoutPlanner.createRoute())
+                            }
+                        },
+                        onOpenWorkoutPlans = {
+                            navController.navigate(Screen.Training.route)
+                        },
+                        onNotificationsClick = {
+                            navController.navigate(Screen.Notifications.route)
+                        },
+                        onProfileClick = {
+                            navController.navigate(Screen.Profile.route)
+                        },
+                        openProgramDetailsSignal = openProgramFlag,
+                        onConsumeOpenProgramDetailsSignal = {
+                            backStackEntry.savedStateHandle["open_program_details"] = false
+                        }
+                    )
+                }
+                composable(Screen.Notifications.route) {
+                    NotificationsScreen(
+                        onBack = { navController.popBackStack() },
+                        onNavigateTarget = { target ->
+                            when (target) {
+                                is NotificationNavigationTarget.WorkoutDetails -> {
+                                    navController.navigate(Screen.WorkoutPlanDetails.createRoute(target.planId))
+                                }
+                                is NotificationNavigationTarget.ProgramAvailable -> {
+                                    navController.navigate(Screen.Home.route) {
+                                        popUpTo(Screen.Home.route) { inclusive = false }
+                                        launchSingleTop = true
+                                    }
+                                    runCatching {
+                                        navController.getBackStackEntry(Screen.Home.route)
+                                            .savedStateHandle["open_program_details"] = true
+                                    }
+                                }
+                                is NotificationNavigationTarget.CoachRelationships -> {
+                                    navController.navigate(Screen.Coach.route) {
+                                        launchSingleTop = true
+                                    }
+                                }
+                                is NotificationNavigationTarget.PersonalRecords -> {
+                                    navController.navigate(Screen.PersonalRecords.route) {
+                                        launchSingleTop = true
+                                    }
+                                }
+                                is NotificationNavigationTarget.AnnouncementDetail,
+                                is NotificationNavigationTarget.None -> Unit
                             }
                         }
                     )
@@ -612,10 +887,74 @@ fun NavGraph(
                     WorkoutPlanListScreen(
                         onPlanClick = { planId ->
                             navController.navigate(Screen.WorkoutPlanDetails.createRoute(planId))
+                        },
+                        onPlanClickWithDate = { planId, startDate ->
+                            navController.navigate(Screen.WorkoutPlanDetails.createRoute(planId = planId, startDate = startDate))
+                        },
+                        onOpenAiPlanner = { clientId, clientName ->
+                            navController.navigate(Screen.AiWorkoutPlanner.createRoute(clientId, clientName))
+                        },
+                        onStartGettingStartedSession = { session ->
+                            navController.navigate(
+                                Screen.WorkoutSession.createRoute(
+                                    workoutId = session.source,
+                                    date = session.workoutDate ?: java.time.LocalDate.now().toString(),
+                                    planId = session.workoutPlanId ?: 0L,
+                                    dayId = session.workoutPlanDayId ?: 0L,
+                                    sessionId = session.id,
+                                    assignmentId = session.assignmentId
+                                )
+                            )
                         }
                     )
                 }
-                composable(Screen.WorkoutPlanDetails.route) {
+                composable(
+                    route = Screen.AiWorkoutPlanner.route,
+                    arguments = listOf(
+                        navArgument("clientId") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
+                        navArgument("clientName") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { backStackEntry ->
+                    val clientIdStr = backStackEntry.arguments?.getString("clientId")
+                    val clientId = clientIdStr?.toLongOrNull()
+                    val clientName = backStackEntry.arguments?.getString("clientName")?.let {
+                        java.net.URLDecoder.decode(it, "UTF-8")
+                    }
+                    AiWorkoutPlannerScreen(
+                        clientId = clientId,
+                        clientName = clientName,
+                        onBackClick = { navController.popBackStack() },
+                        onPlanCommitted = { committedPlan ->
+                            navController.popBackStack()
+                            navController.navigate(
+                                Screen.WorkoutPlanDetails.createRoute(
+                                    planId = committedPlan.id,
+                                    startDate = committedPlan.startDate
+                                )
+                            )
+                        }
+                    )
+                }
+                composable(
+                    route = Screen.WorkoutPlanDetails.route,
+                    arguments = listOf(
+                        navArgument("planId") { type = NavType.StringType },
+                        navArgument("dayOfWeek") { type = NavType.StringType },
+                        navArgument("startDate") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) {
                     WorkoutPlanDetailsScreen(
                         onBackClick = { navController.popBackStack() }
                     )
@@ -623,7 +962,14 @@ fun NavGraph(
                 composable(Screen.Analysis.route) {
                     ExerciseSelectionScreen(
                         onSelectExercise = { navController.navigate(Screen.ProgressionSelection.createRoute(it)) },
+                        onSelectVideoExercise = { id, name, code ->
+                            navController.navigate(Screen.VideoSelection.createRoute(id, name, code))
+                        },
                         onOpenLiveAnalysis = { exerciseCode -> navController.navigate(Screen.LiveAnalysis.createRoute(exerciseCode)) },
+                        onOpenHistory = { navController.navigate(Screen.LiveAnalysisHistory.route) },
+                        onOpenAnalysisResult = { analysisId ->
+                            navController.navigate(Screen.AnalysisResult.createRoute(analysisId))
+                        },
                         onBackClick = { navController.popBackStack() }
                     )
                 }
@@ -634,7 +980,10 @@ fun NavGraph(
                     val exerciseCode = requireNotNull(backStackEntry.arguments?.getString("exerciseCode"))
                     LiveAnalysisScreen(
                         exerciseCode = exerciseCode,
-                        onBackClick = { navController.popBackStack() }
+                        onBackClick = { navController.popBackStack() },
+                        onViewDetails = { sessionId ->
+                            navController.navigate(Screen.WorkoutAnalysisSummary.createRoute(sessionId))
+                        }
                     )
                 }
                 composable(Screen.Coach.route) {
@@ -658,6 +1007,14 @@ fun NavGraph(
                                     otherUserId = otherUserId
                                 )
                             )
+                        },
+                        onSharedPrClick = { sharedPr ->
+                            val currentUserId = viewModel.uiState.value.currentUserId ?: connectionsState?.currentUserId
+                            if (currentUserId != null && sharedPr.clientUserId > 0L && sharedPr.clientUserId != currentUserId) {
+                                navController.navigate(Screen.ClientProgress.createRoute(sharedPr.clientUserId, initialTab = 1))
+                            } else {
+                                navController.navigate(Screen.PersonalRecords.route)
+                            }
                         },
                         viewModel = viewModel
                     )
@@ -722,7 +1079,26 @@ fun NavGraph(
                                     otherUserId = otherUserId
                                 )
                             )
+                        },
+                        onAiAssistantClick = {
+                            navController.navigate(Screen.AiChat.createRoute())
                         }
+                    )
+                }
+                composable(
+                    route = Screen.AiChat.route,
+                    arguments = listOf(
+                        navArgument("conversationId") {
+                            type = NavType.LongType
+                            defaultValue = 0L
+                        }
+                    )
+                ) {
+                    AiChatScreen(
+                        onBackClick = { navController.popBackStack() },
+                        onViewPrsClick = { navController.navigate(Screen.PersonalRecords.route) },
+                        onViewPlansClick = { navController.navigate(Screen.Training.route) },
+                        onViewProfileClick = { navController.navigate(Screen.Profile.route) }
                     )
                 }
                 composable(
@@ -743,17 +1119,30 @@ fun NavGraph(
                             defaultValue = 0L
                         }
                     )
-                ) {
+                ) { backStackEntry ->
+                    val otherUserId = backStackEntry.arguments?.getLong("otherUserId") ?: 0L
                     ChatConversationScreen(
-                        onBackClick = { navController.popBackStack() }
+                        onBackClick = { navController.popBackStack() },
+                        onSharedPrClick = { sharedPr ->
+                            val currentUserId = connectionsState?.currentUserId
+                            val isClientPrFromOtherUser = sharedPr.clientUserId > 0L &&
+                                (sharedPr.clientUserId == otherUserId || (currentUserId != null && sharedPr.clientUserId != currentUserId))
+                            if (isClientPrFromOtherUser) {
+                                navController.navigate(Screen.ClientProgress.createRoute(sharedPr.clientUserId, initialTab = 1))
+                            } else {
+                                navController.navigate(Screen.PersonalRecords.route)
+                            }
+                        }
                     )
                 }
                 composable(Screen.Profile.route) {
                     ProfileScreen(
                         onLogout = {
+                            clearUserSessionNavigationState()
                             navController.navigate(Screen.Auth.route) { popUpTo(0) { inclusive = true } }
                         },
                         onSwitchAccount = {
+                            clearUserSessionNavigationState()
                             navController.navigate(Screen.Auth.route) {
                                 popUpTo(0) { inclusive = true }
                             }
@@ -794,16 +1183,19 @@ fun NavGraph(
                 composable(Screen.SwitchAccount.route) {
                     com.calisthenics.ai.ui.profile.SwitchAccountScreen(
                         onAccountSwitched = {
+                            clearUserSessionNavigationState()
                             navController.navigate(AuthenticatedGraph) {
                                 popUpTo(0) { inclusive = true }
                             }
                         },
                         onAddAccount = {
+                            clearUserSessionNavigationState()
                             navController.navigate("${Screen.Auth.route}?isAddingAccount=true") {
                                 popUpTo(0) { inclusive = true }
                             }
                         },
                         onAllAccountsRemoved = {
+                            clearUserSessionNavigationState()
                             navController.navigate(Screen.Auth.route) {
                                 popUpTo(0) { inclusive = true }
                             }
@@ -843,7 +1235,65 @@ fun NavGraph(
                 composable(Screen.WorkoutHistory.route) {
                     WorkoutHistoryScreen(
                         onBack = { navController.popBackStack() },
-                        onSessionSelected = { id -> navController.navigate(Screen.WorkoutSummary.createRoute(id)) }
+                        onSessionSelected = { id -> navController.navigate(Screen.WorkoutSummary.createRoute(id)) },
+                        onResumeSession = { session ->
+                            navController.navigate(
+                                Screen.WorkoutSession.createRoute(
+                                    workoutId = session.source,
+                                    date = session.workoutDate ?: java.time.LocalDate.now().toString(),
+                                    planId = session.workoutPlanId ?: 0L,
+                                    dayId = session.workoutPlanDayId ?: 0L,
+                                    sessionId = session.id,
+                                    assignmentId = session.assignmentId
+                                )
+                            )
+                        },
+                        onAnalysisSessionSelected = { sessionId ->
+                            navController.navigate(Screen.WorkoutAnalysisSummary.createRoute(sessionId))
+                        },
+                        onExploreAiPlanner = {
+                            navController.navigate(Screen.AiWorkoutPlanner.createRoute())
+                        },
+                        onCreateWorkoutPlan = {
+                            navController.navigate(Screen.Training.route)
+                        }
+                    )
+                }
+                composable(Screen.LiveAnalysisHistory.route) {
+                    LiveAnalysisHistoryScreen(
+                        onBackClick = { navController.popBackStack() },
+                        onSessionClick = { sessionId ->
+                            navController.navigate(Screen.WorkoutAnalysisSummary.createRoute(sessionId))
+                        },
+                        onStartWorkout = { navController.popBackStack() }
+                    )
+                }
+                composable(
+                    route = Screen.LiveAnalysisHistoryDetail.route,
+                    arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
+                ) {
+                    WorkoutAnalysisSummaryScreen(
+                        onBackClick = { navController.popBackStack() },
+                        onViewHistoryClick = {
+                            navController.navigate(Screen.LiveAnalysisHistory.route) {
+                                launchSingleTop = true
+                            }
+                        },
+                        onDoneClick = { navController.popBackStack() }
+                    )
+                }
+                composable(
+                    route = Screen.WorkoutAnalysisSummary.route,
+                    arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
+                ) {
+                    WorkoutAnalysisSummaryScreen(
+                        onBackClick = { navController.popBackStack() },
+                        onViewHistoryClick = {
+                            navController.navigate(Screen.LiveAnalysisHistory.route) {
+                                launchSingleTop = true
+                            }
+                        },
+                        onDoneClick = { navController.popBackStack() }
                     )
                 }
                 composable(
@@ -866,13 +1316,26 @@ fun NavGraph(
                                     sessionId = session.id
                                 )
                             )
+                        },
+                        onExploreAiPlanner = {
+                            navController.navigate(Screen.AiWorkoutPlanner.createRoute())
+                        },
+                        onCreateWorkoutPlan = {
+                            navController.navigate(Screen.Training.route)
                         }
                     )
                 }
                 composable(Screen.ExerciseSelection.route) {
                     ExerciseSelectionScreen(
                         onSelectExercise = { navController.navigate(Screen.ProgressionSelection.createRoute(it)) },
+                        onSelectVideoExercise = { id, name, code ->
+                            navController.navigate(Screen.VideoSelection.createRoute(id, name, code))
+                        },
                         onOpenLiveAnalysis = { exerciseCode -> navController.navigate(Screen.LiveAnalysis.createRoute(exerciseCode)) },
+                        onOpenHistory = { navController.navigate(Screen.LiveAnalysisHistory.route) },
+                        onOpenAnalysisResult = { analysisId ->
+                            navController.navigate(Screen.AnalysisResult.createRoute(analysisId))
+                        },
                         onBackClick = { navController.popBackStack() }
                     )
                 }
@@ -882,7 +1345,17 @@ fun NavGraph(
                         onBackClick = { navController.popBackStack() }
                     )
                 }
-                composable(Screen.VideoSelection.route) {
+                composable(
+                    route = Screen.VideoSelection.route,
+                    arguments = listOf(
+                        navArgument("exerciseId") { type = NavType.StringType },
+                        navArgument("progressionName") { type = NavType.StringType },
+                        navArgument("exerciseCode") {
+                            type = NavType.StringType
+                            defaultValue = ""
+                        }
+                    )
+                ) {
                     VideoSelectionScreen(
                         onAnalysisSuccess = { id -> navController.navigate(Screen.AnalysisResult.createRoute(id)) },
                         onBackClick = { navController.popBackStack() }
@@ -928,10 +1401,18 @@ fun NavGraph(
                 }
                 composable(
                     route = Screen.ClientProgress.route,
-                    arguments = listOf(navArgument("clientId") { type = NavType.LongType })
-                ) {
+                    arguments = listOf(
+                        navArgument("clientId") { type = NavType.LongType },
+                        navArgument("initialTab") {
+                            type = NavType.IntType
+                            defaultValue = 0
+                        }
+                    )
+                ) { backStackEntry ->
+                    val initialTab = backStackEntry.arguments?.getInt("initialTab") ?: 0
                     ClientProgressScreen(
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStack() },
+                        initialTab = initialTab
                     )
                 }
                 composable(Screen.BodyMetrics.route) {
@@ -947,6 +1428,25 @@ fun NavGraph(
             modifier = Modifier.align(Alignment.TopCenter)
         )
 
+        UnfinishedWorkoutBubbleHost(
+            onResumeSession = { session ->
+                navController.navigate(
+                    Screen.WorkoutSession.createRoute(
+                        workoutId = session.source,
+                        date = session.workoutDate ?: java.time.LocalDate.now().toString(),
+                        planId = session.workoutPlanId ?: 0L,
+                        dayId = session.workoutPlanDayId ?: 0L,
+                        sessionId = session.id,
+                        assignmentId = session.assignmentId
+                    )
+                )
+            },
+            currentRoute = currentRoute,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = if (showBottomBar) 88.dp else 16.dp)
+        )
+
         if (showBottomBar) {
             val context = LocalContext.current
             FloatingBottomBar(
@@ -955,9 +1455,9 @@ fun NavGraph(
                 onItemClick = { route ->
                     if (route != currentRoute) {
                         if (!isOnline && offlineAccessPolicy?.isFeatureRestrictedOffline(route) == true) {
-                            Toast.makeText(context, "This feature requires an internet connection", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, offlineFeatureMessage, Toast.LENGTH_SHORT).show()
                         } else if (isOnline && authState?.authenticated != true && route != Screen.Home.route && route != Screen.Training.route) {
-                            Toast.makeText(context, "Please sign in to access this feature", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, signInRequiredMessage, Toast.LENGTH_SHORT).show()
                         } else {
                             navController.navigate(route) {
                                 popUpTo(Screen.Home.route) {
@@ -972,6 +1472,23 @@ fun NavGraph(
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
+
+        val activeGenderGateVm = genderGateViewModel
+        val activeGenderGateState = genderGateState
+        if (authState?.authenticated == true &&
+            currentRoute != null &&
+            currentRoute != Screen.AuthenticatedEntry.route &&
+            activeGenderGateVm != null &&
+            activeGenderGateState?.shouldShowModal == true
+        ) {
+            GenderOnboardingDialog(
+                selectedGender = activeGenderGateState.selectedGender,
+                isSaving = activeGenderGateState.isSaving,
+                errorMessage = activeGenderGateState.errorMessage,
+                onSelect = activeGenderGateVm::selectGender,
+                onConfirm = activeGenderGateVm::confirmGender
+            )
+        }
     }
 }
 
@@ -984,7 +1501,7 @@ private fun SplashScreen() {
     ) {
         androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
         Icon(Icons.Default.FitnessCenter, contentDescription = null, modifier = Modifier.padding(16.dp))
-        Text("Calisthenics AI")
+        Text(stringResource(R.string.app_name))
         androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
     }
 }
@@ -1029,5 +1546,21 @@ private fun AdminOnlyRoute(
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
+    }
+}
+
+@Composable
+private fun withAdminLogout(
+    base: AdminNavigationCallbacks,
+    performAdminLogout: () -> Unit
+): AdminNavigationCallbacks {
+    val adminViewModel: AdminViewModel = hiltViewModel()
+    return remember(base, performAdminLogout, adminViewModel) {
+        base.copy(
+            onLogout = {
+                adminViewModel.logout()
+                performAdminLogout()
+            }
+        )
     }
 }

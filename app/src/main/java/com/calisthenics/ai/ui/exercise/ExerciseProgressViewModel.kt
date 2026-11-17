@@ -3,6 +3,8 @@ package com.calisthenics.ai.ui.exercise
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.calisthenics.ai.data.local.AccountSessionGuard
+import com.calisthenics.ai.data.local.AccountSessionManager
 import com.calisthenics.ai.data.remote.dto.ExerciseProgressDto
 import com.calisthenics.ai.data.remote.dto.ProgressChartDataPointDto
 import com.calisthenics.ai.domain.repository.AnalyticsRepository
@@ -33,7 +35,8 @@ enum class ProgressMetricType(val label: String, val unit: String) {
 @HiltViewModel
 class ExerciseProgressViewModel @Inject constructor(
     private val analyticsRepository: AnalyticsRepository,
-    savedStateHandle: SavedStateHandle
+    savedStateHandle: SavedStateHandle,
+    private val accountSessionManager: AccountSessionManager = AccountSessionManager()
 ) : ViewModel() {
 
     private val exerciseId: Long = savedStateHandle.get<Long>("exerciseId")
@@ -43,7 +46,15 @@ class ExerciseProgressViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ExerciseProgressUiState())
     val uiState: StateFlow<ExerciseProgressUiState> = _uiState.asStateFlow()
 
+    private val sessionGuard = AccountSessionGuard(
+        parentScope = viewModelScope,
+        sessionManager = accountSessionManager,
+        onSessionCleared = { _uiState.value = ExerciseProgressUiState() },
+        onSessionActive = { load(filter = _uiState.value.selectedFilter) }
+    )
+
     init {
+        sessionGuard.startObserving()
         load(filter = _uiState.value.selectedFilter)
     }
 
@@ -53,10 +64,11 @@ class ExerciseProgressViewModel @Inject constructor(
             return
         }
 
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             _uiState.update { it.copy(isLoading = true, error = null, selectedFilter = filter) }
             analyticsRepository.getExerciseProgress(exerciseId, filter)
                 .onSuccess { progress ->
+                    if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
                     // Determine best default metric based on exercise
                     val defaultMetric = when {
                         progress.maxWeightKg != null && progress.maxWeightKg > 0 -> ProgressMetricType.WEIGHT

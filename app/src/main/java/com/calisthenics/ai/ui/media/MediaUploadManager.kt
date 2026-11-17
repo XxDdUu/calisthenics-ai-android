@@ -5,9 +5,12 @@ import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.calisthenics.ai.data.mapper.toDomain
 import com.calisthenics.ai.data.remote.api.CalisthenicsApi
 import com.calisthenics.ai.domain.model.ExerciseMedia
 import com.calisthenics.ai.domain.model.ExerciseMediaType
+import com.calisthenics.ai.domain.model.ProfileMediaItem
+import com.calisthenics.ai.domain.model.ProfileType
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -32,6 +35,50 @@ class MediaUploadManager @Inject constructor(
         onProgress: (Float) -> Unit = {}
     ): Result<String> = upload(uri, null, null, onProgress).map { it.fileDownloadUri }
 
+    suspend fun uploadProfileMedia(
+        uri: Uri,
+        profileType: ProfileType
+    ): Result<ProfileMediaItem> = withContext(Dispatchers.IO) {
+        runCatching {
+            val contentResolver = context.contentResolver
+            val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
+            val fileName = getFileName(uri) ?: ("media_" + UUID.randomUUID().toString())
+
+            val tempFile = File(context.cacheDir, "upload_prof_${UUID.randomUUID()}_$fileName")
+            var tempThumbnail: File? = null
+            try {
+                contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(tempFile).use { output ->
+                        input.copyTo(output)
+                    }
+                } ?: throw IllegalArgumentException("Could not open input stream for URI: $uri")
+
+                if (mimeType.startsWith("video/")) {
+                    val thumbBitmap = getVideoThumbnail(uri)
+                    if (thumbBitmap != null) {
+                        tempThumbnail = File(context.cacheDir, "thumb_${UUID.randomUUID()}.jpg")
+                        FileOutputStream(tempThumbnail).use { out ->
+                            thumbBitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                        }
+                    }
+                }
+
+                val fileBody = tempFile.asRequestBody(mimeType.toMediaTypeOrNull())
+                val filePart = MultipartBody.Part.createFormData("file", fileName, fileBody)
+                val thumbPart = tempThumbnail?.let {
+                    val thumbBody = it.asRequestBody("image/jpeg".toMediaTypeOrNull())
+                    MultipartBody.Part.createFormData("thumbnail", it.name, thumbBody)
+                }
+
+                val dto = api.uploadProfileMedia(profileType.name, filePart, thumbPart)
+                dto.toDomain()
+            } finally {
+                if (tempFile.exists()) tempFile.delete()
+                tempThumbnail?.let { if (it.exists()) it.delete() }
+            }
+        }
+    }
+
     suspend fun uploadMediaForExercise(
         uri: Uri,
         exerciseId: Long,
@@ -45,9 +92,9 @@ class MediaUploadManager @Inject constructor(
         } ?: throw IllegalStateException("The server returned an invalid exercise media type.")
         ExerciseMedia(
             type = mediaType,
-            url = persisted.url?.takeIf(String::isNotBlank)
+            url = MediaUrlUtils.resolveMediaUrl(persisted.url)?.takeIf(String::isNotBlank)
                 ?: throw IllegalStateException("The server returned an empty exercise media URL."),
-            thumbnailUrl = persisted.thumbnailUrl,
+            thumbnailUrl = MediaUrlUtils.resolveMediaUrl(persisted.thumbnailUrl),
             displayOrder = persisted.displayOrder ?: displayOrder
         )
     }

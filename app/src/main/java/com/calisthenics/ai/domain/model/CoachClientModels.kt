@@ -23,7 +23,10 @@ data class CoachProfile(
     val assignedPlansCount: Long = 0L,
     val connectionStatus: String? = null,
     val relationshipId: Long? = null,
-    val conversationId: Long? = null
+    val conversationId: Long? = null,
+    val gender: Gender? = null,
+    val averageRating: Double? = null,
+    val reviewCount: Long? = null
 )
 
 data class ClientProfile(
@@ -44,7 +47,9 @@ data class ClientProfile(
     val currentPlanId: Long? = null,
     val currentPlanName: String? = null,
     val heightCm: Double? = null,
-    val connectedCoach: ConnectedCoachSummary? = null
+    val weightKg: Double? = null,
+    val connectedCoach: ConnectedCoachSummary? = null,
+    val gender: Gender? = null
 )
 
 data class ConnectedCoachSummary(
@@ -54,7 +59,8 @@ data class ConnectedCoachSummary(
     val coachExperienceLevel: String? = null,
     val connectionStatus: String = "ACTIVE",
     val relationshipId: Long? = null,
-    val conversationId: Long? = null
+    val conversationId: Long? = null,
+    val coachGender: Gender? = null
 )
 
 data class ClientTrainingOverview(
@@ -64,6 +70,7 @@ data class ClientTrainingOverview(
     val currentPlanId: Long? = null,
     val currentPlanName: String? = null,
     val heightCm: Double? = null,
+    val weightKg: Double? = null,
     val connectedCoach: ConnectedCoachSummary? = null,
     val recentWorkouts: List<RecentWorkoutItem> = emptyList()
 )
@@ -88,7 +95,9 @@ data class CoachClientRelationship(
     val requestedBy: Long,
     val status: String,
     val createdAt: String?,
-    val updatedAt: String?
+    val updatedAt: String?,
+    val coachGender: Gender? = null,
+    val clientGender: Gender? = null
 )
 
 data class CoachConnectionOverview(

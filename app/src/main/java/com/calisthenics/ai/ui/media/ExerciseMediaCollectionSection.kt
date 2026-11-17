@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.media
 
+import com.calisthenics.ai.R
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -139,9 +142,9 @@ fun ExerciseMediaCollectionSection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Additional exercise media", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.additional_exercise_media), style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "Add multiple images or videos in story order",
+                        stringResource(R.string.loc_add_media_story_order),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -152,20 +155,20 @@ fun ExerciseMediaCollectionSection(
                         picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                     }
                 ) {
-                    Text("Add media")
+                    Text(stringResource(R.string.add_media))
                 }
             }
 
             if (isUploading) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
-                Text("Uploading media...", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.uploading_media), style = MaterialTheme.typography.bodySmall)
             }
             uploadError?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
             if (mediaItems.size >= 100) {
                 Text(
-                    "The maximum of 100 additional media items has been reached.",
+                    stringResource(R.string.loc_media_limit_reached),
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -214,7 +217,7 @@ private fun MediaCollectionItem(
             if (media.type == ExerciseMediaType.IMAGE && !thumbnailFailed) {
                 AsyncImage(
                     model = ImageRequest.Builder(context).data(media.url).crossfade(true).build(),
-                    contentDescription = "Exercise image ${index + 1}",
+                    contentDescription = stringResource(R.string.loc_exercise_image_index, index + 1),
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                     onError = { thumbnailFailed = true }
@@ -236,7 +239,7 @@ private fun MediaCollectionItem(
             ) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "Remove media ${index + 1}",
+                    contentDescription = stringResource(R.string.loc_remove_media_index, index + 1),
                     tint = Color.White,
                     modifier = Modifier.size(16.dp)
                 )

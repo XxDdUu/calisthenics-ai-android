@@ -119,12 +119,12 @@ class TrainingAnalyticsViewModelTest {
         coEvery { analyticsRepository.getMonthlyAnalytics() } returns Result.success(MonthlyAnalyticsDto(yearMonth = ""))
         coEvery { analyticsRepository.getTrainingInsights() } returns Result.success(TrainingInsightsDto())
         coEvery { analyticsRepository.getClientSharedPRs() } returns Result.success(emptyList())
-        coEvery { analyticsRepository.sharePersonalRecord(50L) } returns Result.success(shared)
+        coEvery { analyticsRepository.sharePersonalRecord(50L, any(), any()) } returns Result.success(shared)
 
         val viewModel = TrainingAnalyticsViewModel(analyticsRepository)
         advanceUntilIdle()
 
-        viewModel.shareRecordWithCoach(50L)
+        viewModel.shareRecordWithCoach(50L, recipientId = 2L)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value

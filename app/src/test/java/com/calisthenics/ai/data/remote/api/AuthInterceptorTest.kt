@@ -130,5 +130,32 @@ class AuthInterceptorTest {
 
         org.junit.Assert.assertNotNull(interceptedRequest?.header("X-Correlation-ID"))
     }
+
+    @Test
+    fun `skips authorization header for firebase auth endpoint`() {
+        every { tokenManager.getAccessToken() } returns "existing-token"
+
+        val firebaseRequest = Request.Builder()
+            .url("http://localhost:8080/api/v1/auth/firebase")
+            .build()
+
+        var interceptedRequest: Request? = null
+        val chain = mockk<Interceptor.Chain>()
+        every { chain.request() } returns firebaseRequest
+        every { chain.proceed(any()) } answers {
+            interceptedRequest = firstArg()
+            Response.Builder()
+                .request(interceptedRequest!!)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body("{}".toResponseBody("application/json".toMediaType()))
+                .build()
+        }
+
+        authInterceptor.intercept(chain)
+
+        assertNull(interceptedRequest?.header("Authorization"))
+    }
 }
 

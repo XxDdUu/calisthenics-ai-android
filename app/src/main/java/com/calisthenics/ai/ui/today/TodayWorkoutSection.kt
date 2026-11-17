@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.today
 
+import com.calisthenics.ai.R
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
@@ -15,19 +17,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.BubbleChart
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,6 +41,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -51,14 +58,25 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.calisthenics.ai.ui.theme.Accent
+import com.calisthenics.ai.ui.theme.Border
+import com.calisthenics.ai.ui.theme.Elevated
+import com.calisthenics.ai.ui.theme.Ink
+import com.calisthenics.ai.ui.theme.PrimaryText
+import com.calisthenics.ai.ui.theme.SecondaryText
+import com.calisthenics.ai.ui.theme.Surface
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -94,10 +112,12 @@ fun TodayWorkoutSection(
     onViewPlans: () -> Unit,
     onViewHistory: () -> Unit,
     onResumeSession: (WorkoutSession) -> Unit,
+    onOpenBubble: (() -> Unit)? = null,
     viewModel: TodayWorkoutViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
 
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
@@ -114,20 +134,20 @@ fun TodayWorkoutSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("Today's Workout", style = MaterialTheme.typography.headlineMedium)
+                Text(stringResource(R.string.todays_workout), style = MaterialTheme.typography.headlineMedium)
                 Text(
                     state.date.format(DateTimeFormatter.ofPattern("EEEE, MMMM d", Locale.getDefault())),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    "Your training plan for today.",
+                    stringResource(R.string.loc_your_training_plan_today),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             IconButton(onClick = viewModel::refresh, enabled = !state.isLoading) {
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh today's workout")
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.loc_refresh_todays_workout))
             }
         }
 
@@ -142,24 +162,30 @@ fun TodayWorkoutSection(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-                    Text("Loading today's workout…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.loading_todays_workout), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             state.error != null -> MessageCard(
-                title = "Workout unavailable",
-                body = state.error ?: "Could not load today's workout.",
-                action = "Retry",
+                title = stringResource(R.string.workout_unavailable),
+                body = state.error ?: stringResource(R.string.could_not_load_today),
+                action = stringResource(R.string.common_retry),
                 onAction = viewModel::refresh
             )
-            state.selection.kind == TodayWorkoutKind.NO_PLANS -> MessageCard(
-                title = if (!state.isOnline) "No Cached Workout" else "No workout plan yet.",
-                body = if (!state.isOnline)
-                    "No cached workout schedule available. Connect to the internet to sync your schedule."
-                else
-                    "Create a plan to see your scheduled training here.",
-                action = if (!state.isOnline) "Retry" else "View workout plans",
-                onAction = if (!state.isOnline) viewModel::refresh else onViewPlans
-            )
+            state.selection.kind == TodayWorkoutKind.NO_PLANS -> if (
+                state.activeSessions.none { it.source == "GETTING_STARTED" } &&
+                state.upcomingSessions.none { it.source == "GETTING_STARTED" } &&
+                state.activeGettingStartedProgram?.enrollment?.addedToWorkoutPlan != true
+            ) {
+                MessageCard(
+                    title = if (!state.isOnline) stringResource(R.string.no_cached_workout) else stringResource(R.string.no_workout_plan_yet_period),
+                    body = if (!state.isOnline)
+                        stringResource(R.string.no_cached_schedule)
+                    else
+                        stringResource(R.string.create_plan_schedule),
+                    action = if (!state.isOnline) stringResource(R.string.common_retry) else stringResource(R.string.view_workout_plans),
+                    onAction = if (!state.isOnline) viewModel::refresh else onViewPlans
+                )
+            }
             state.selection.kind == TodayWorkoutKind.PLAN_SELECTION_REQUIRED -> PlanChoiceCard(
                 plans = state.plans,
                 source = state.selection.source,
@@ -206,16 +232,50 @@ fun TodayWorkoutSection(
                 }
             }
         }
-        if (state.activeSessions.isNotEmpty()) {
-            ActiveWorkoutRecoveryCard(state.activeSessions, onResumeSession)
-        } else if (state.activeSessionsError != null) {
+        val gettingStartedActiveSessions = state.activeSessions.filter {
+            it.source == "GETTING_STARTED" && it.status != "COMPLETED"
+        }
+        val otherActiveSessions = state.activeSessions.filter { it.source != "GETTING_STARTED" }
+        if (gettingStartedActiveSessions.isNotEmpty()) {
+            GettingStartedTodaySessionsCard(
+                sessions = gettingStartedActiveSessions,
+                onStartOrResumeSession = onResumeSession
+            )
+        }
+        if (state.isBubbleEnabled && otherActiveSessions.isNotEmpty()) {
+            ActiveWorkoutRecoveryCard(
+                sessions = otherActiveSessions,
+                onResumeSession = onResumeSession,
+                onOpenBubble = onOpenBubble ?: {
+                    val opened = viewModel.openWorkoutBubble()
+                    if (!opened) {
+                        if (!state.isBubbleEnabled) {
+                            android.widget.Toast.makeText(
+                                context,
+                                context.getString(R.string.bubble_feature_disabled),
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        } else if (otherActiveSessions.isEmpty()) {
+                            android.widget.Toast.makeText(
+                                context,
+                                context.getString(R.string.no_unfinished_workouts),
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
+            )
+        } else if (state.isBubbleEnabled && state.activeSessionsError != null) {
             Text(
-                state.activeSessionsError ?: "Unfinished workouts are unavailable.",
+                state.activeSessionsError ?: stringResource(R.string.unfinished_unavailable),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall
             )
         }
-        TextButton(onClick = onViewHistory) { Text("Workout history") }
+        if (state.upcomingSessions.isNotEmpty()) {
+            UpcomingWorkoutsCard(state.upcomingSessions.take(4))
+        }
+        TextButton(onClick = onViewHistory) { Text(stringResource(R.string.workout_history)) }
 
         when {
             state.selection.plan != null -> {
@@ -226,16 +286,16 @@ fun TodayWorkoutSection(
                     onDayClick = { day -> onViewDetails(plan.id, day) }
                 )
             }
-            state.isLoading -> WeeklyScheduleEmptySection(state.date, "Loading your weekly schedule…")
-            state.error != null -> WeeklyScheduleEmptySection(state.date, "Your schedule is unavailable. Retry above.")
+            state.isLoading -> WeeklyScheduleEmptySection(state.date, stringResource(R.string.loading_weekly_schedule))
+            state.error != null -> WeeklyScheduleEmptySection(state.date, stringResource(R.string.schedule_unavailable_retry))
             state.selection.kind == TodayWorkoutKind.PLAN_SELECTION_REQUIRED ->
-                WeeklyScheduleEmptySection(state.date, "Choose an active plan to see its weekly schedule.")
+                WeeklyScheduleEmptySection(state.date, stringResource(R.string.choose_active_plan_schedule))
             else -> WeeklyScheduleEmptySection(
                 state.date,
                 if (!state.isOnline)
-                    "No cached workout schedule available. Connect to the internet to sync your schedule."
+                    stringResource(R.string.no_cached_schedule)
                 else
-                    "Create a workout plan to see your weekly schedule."
+                    stringResource(R.string.create_plan_weekly_schedule)
             )
         }
     }
@@ -244,33 +304,170 @@ fun TodayWorkoutSection(
 @Composable
 private fun ActiveWorkoutRecoveryCard(
     sessions: List<WorkoutSession>,
-    onResumeSession: (WorkoutSession) -> Unit
+    onResumeSession: (WorkoutSession) -> Unit,
+    onOpenBubble: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Border),
+        colors = CardDefaults.cardColors(containerColor = Elevated)
     ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Unfinished workouts", style = MaterialTheme.typography.titleLarge)
-            Text(
-                "Choose a session to resume. Older sessions remain available and are not replaced.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            sessions.forEach { session ->
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(session.title, fontWeight = FontWeight.Medium)
-                        Text(
-                            session.workoutDate ?: "Date unavailable",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(Accent.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FitnessCenter,
+                            contentDescription = null,
+                            tint = Accent,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
-                    OutlinedButton(onClick = { onResumeSession(session) }) { Text("Resume") }
+                    Text(
+                        text = stringResource(R.string.unfinished_workouts),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = PrimaryText
+                    )
+                }
+            }
+
+            Text(
+                text = stringResource(R.string.loc_choose_session_resume),
+                style = MaterialTheme.typography.bodySmall,
+                color = SecondaryText
+            )
+
+            sessions.forEach { session ->
+                val totalSets = session.exercises.sumOf { it.sets.size }
+                val completedSets = session.exercises.sumOf { ex -> ex.sets.count { it.completed } }
+                val progress = if (totalSets > 0) completedSets.toFloat() / totalSets else 0f
+                val currentExercise = session.exercises.firstOrNull { ex ->
+                    ex.status != "COMPLETED" && ex.status != "SKIPPED"
+                }?.exerciseName ?: session.exercises.firstOrNull()?.exerciseName.orEmpty()
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Surface)
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = session.title,
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = PrimaryText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (currentExercise.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = currentExercise,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Accent,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        if (totalSets > 0) {
+                            Text(
+                                text = "$completedSets/$totalSets ${stringResource(R.string.loc_sets_label)}",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = PrimaryText
+                            )
+                        }
+                    }
+
+                    if (totalSets > 0) {
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = Accent,
+                            trackColor = Border,
+                            strokeCap = StrokeCap.Round
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = onOpenBubble,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = PrimaryText
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Border)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.BubbleChart,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = Accent
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.open_bubble),
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                            )
+                        }
+
+                        Button(
+                            onClick = { onResumeSession(session) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Accent,
+                                contentColor = Ink
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (session.status == "SCHEDULED") {
+                                    stringResource(R.string.start_workout)
+                                } else {
+                                    stringResource(R.string.resume)
+                                },
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -289,11 +486,11 @@ private fun PlanChoiceCard(
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
-                if (source == WorkoutSource.COACH) "Choose a Coach-assigned plan" else "Choose your personal plan",
+                if (source == WorkoutSource.COACH) stringResource(R.string.choose_coach_plan) else stringResource(R.string.choose_personal_plan),
                 style = MaterialTheme.typography.titleLarge
             )
             Text(
-                "You have multiple plans. Select which one to use for today's workout.",
+                stringResource(R.string.loc_multiple_plans_today),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             plans.forEach { plan ->
@@ -313,7 +510,7 @@ private fun ActivePlanPicker(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("Active plan", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.active_plan), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.size(4.dp))
         TextButton(onClick = { expanded = true }) { Text(selectedPlan.name) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -344,15 +541,15 @@ private fun RestDayCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("REST DAY", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            Text("Recovery is part of progress.", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.rest_day), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text(stringResource(R.string.recovery_is_progress), style = MaterialTheme.typography.titleLarge)
             Text(
                 sourceLabel(source, coachName),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall
             )
-            Text("No exercises are scheduled for today.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            TextButton(onClick = { onViewDetails(plan.id, day.dayOfWeek) }) { Text("View workout details") }
+            Text(stringResource(R.string.no_exercises_today), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(onClick = { onViewDetails(plan.id, day.dayOfWeek) }) { Text(stringResource(R.string.view_workout_details)) }
         }
     }
 }
@@ -364,9 +561,9 @@ private fun NotScheduledCard(
     onViewDetails: (Long, WorkoutDayOfWeek) -> Unit
 ) {
     MessageCard(
-        title = "Nothing scheduled for today.",
-        body = "This day is not configured as a workout or an explicit rest day in ${plan.name}.",
-        action = "View weekly schedule",
+        title = stringResource(R.string.loc_nothing_scheduled_today),
+        body = stringResource(R.string.not_configured_day, plan.name),
+        action = stringResource(R.string.view_weekly_schedule),
         onAction = { onViewDetails(plan.id, dayOfWeek) }
     )
 }
@@ -389,7 +586,7 @@ private fun ScheduledWorkoutCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("TODAY'S FOCUS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text(stringResource(R.string.today_focus), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             Text(day.sessionType.displayName, style = MaterialTheme.typography.titleLarge)
             Text(
                 sourceLabel(source, coachName),
@@ -402,7 +599,7 @@ private fun ScheduledWorkoutCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                "${exercises.size} ${if (exercises.size == 1) "exercise" else "exercises"} · Scheduled",
+                "${pluralStringResource(R.plurals.exercise_count, exercises.size)} · ${stringResource(R.string.scheduled)}",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium
             )
@@ -411,38 +608,39 @@ private fun ScheduledWorkoutCard(
                     onClick = { onViewDetails(plan.id, day.dayOfWeek) },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("View workout details")
+                    Text(stringResource(R.string.view_workout_details))
                 }
                 OutlinedButton(
                     onClick = { onStartWorkout(plan.id, day.id, date, assignmentId) },
                     enabled = exercises.isNotEmpty(),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Start workout")
+                    Text(stringResource(R.string.start_workout))
                 }
             }
         }
     }
     if (exercises.isEmpty()) {
         MessageCard(
-            title = "No exercises assigned",
-            body = "This workout is scheduled, but it does not have any exercises yet.",
+            title = stringResource(R.string.no_exercises_assigned),
+            body = stringResource(R.string.scheduled_empty_workout),
             action = null,
             onAction = {}
         )
     } else {
-        Text("Exercises", style = MaterialTheme.typography.titleLarge)
+        Text(stringResource(R.string.exercises), style = MaterialTheme.typography.titleLarge)
         exercises.forEach { exercise ->
             ExerciseCard(exercise)
         }
     }
 }
 
+@Composable
 private fun sourceLabel(source: WorkoutSource, coachName: String?): String =
     when (source) {
-        WorkoutSource.COACH -> coachName?.let { "Assigned by Coach $it" } ?: "Assigned by your Coach"
-        WorkoutSource.PERSONAL -> "From your personal plan"
-        WorkoutSource.NONE -> "No workout source"
+        WorkoutSource.COACH -> coachName?.let { stringResource(R.string.assigned_by_coach, it) } ?: stringResource(R.string.assigned_by_your_coach)
+        WorkoutSource.PERSONAL -> stringResource(R.string.from_personal_plan)
+        WorkoutSource.NONE -> stringResource(R.string.no_workout_source)
     }
 
 @Composable
@@ -468,7 +666,7 @@ private fun WeeklyWorkoutMediaSection(
     val resolved = selectedWorkout?.let { resolveWorkoutMedia(it, categoryFallback, globalFallback) }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Weekly workouts", style = MaterialTheme.typography.titleLarge)
+        Text(stringResource(R.string.weekly_workouts), style = MaterialTheme.typography.titleLarge)
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -512,8 +710,8 @@ private fun WeeklyWorkoutMediaSection(
 
         if (selectedWorkout == null || selectedWorkout.isRestDay) {
             MessageCard(
-                title = if (selectedWorkout?.isRestDay == true) "Recovery day" else "No workout scheduled",
-                body = "There is no training session configured for ${selectedDay.displayName}.",
+                title = if (selectedWorkout?.isRestDay == true) stringResource(R.string.recovery_day) else stringResource(R.string.no_workout_scheduled),
+                body = stringResource(R.string.no_training_session_day, selectedDay.displayName),
                 action = null,
                 onAction = {}
             )
@@ -594,6 +792,8 @@ private fun WeeklyWorkoutMediaCard(
         .joinToString(" / ")
         .takeIf(String::isNotBlank)
     val durationSeconds = day.exercises.sumOf { (it.durationSeconds ?: 0) * it.sets }
+    val exercisesLabel = stringResource(R.string.exercises)
+    val minutesLabel = stringResource(R.string.minutes_short, durationSeconds / 60)
 
     Card(
         modifier = Modifier
@@ -647,7 +847,7 @@ private fun WeeklyWorkoutMediaCard(
             ) {
                 Icon(
                     imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (isFavorite) "Remove favorite" else "Add favorite",
+                    contentDescription = stringResource(if (isFavorite) R.string.remove_favorite else R.string.add_favorite),
                     tint = if (isFavorite) MaterialTheme.colorScheme.primary else Color.White
                 )
             }
@@ -666,24 +866,232 @@ private fun WeeklyWorkoutMediaCard(
                         append(day.sessionType.displayName)
                         append(" · ")
                         append(day.exercises.size)
-                        append(" exercises")
+                        append(" ")
+                        append(exercisesLabel)
                         difficulty?.let {
                             append(" · ")
                             append(it)
                         }
                         if (durationSeconds > 0) {
                             append(" · ")
-                            append("${durationSeconds / 60} min")
+                            append(minutesLabel)
                         }
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.86f)
                 )
                 Text(
-                    "Scheduled workout",
+                    stringResource(R.string.loc_scheduled_workout),
                     style = MaterialTheme.typography.labelMedium,
                     color = Color.White.copy(alpha = 0.72f)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GettingStartedTodaySessionsCard(
+    sessions: List<WorkoutSession>,
+    onStartOrResumeSession: (WorkoutSession) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                ) {
+                    Text(
+                        text = stringResource(R.string.getting_started_short_badge),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    Text(
+                        text = stringResource(R.string.getting_started_temporary_badge),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            sessions.forEach { session ->
+                val isScheduled = session.status == "SCHEDULED"
+                val totalSets = session.exercises.sumOf { it.sets.size }
+                val completedSets = session.exercises.sumOf { ex -> ex.sets.count { it.completed } }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = session.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = buildString {
+                                        if (!session.workoutDate.isNullOrBlank()) {
+                                            append(session.workoutDate)
+                                            append(" · ")
+                                        }
+                                        append(pluralStringResource(R.plurals.exercise_count, session.exercises.size))
+                                        if (!isScheduled && totalSets > 0) {
+                                            append(" · $completedSets/$totalSets")
+                                        }
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Surface(
+                                shape = CircleShape,
+                                color = if (isScheduled) {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                                } else {
+                                    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f)
+                                }
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        if (isScheduled) R.string.scheduled else R.string.getting_started_in_progress_badge
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isScheduled) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.tertiary
+                                    },
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                        Button(
+                            onClick = { onStartOrResumeSession(session) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(
+                                    if (isScheduled) R.string.start_workout else R.string.resume
+                                ),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpcomingWorkoutsCard(sessions: List<WorkoutSession>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                stringResource(R.string.upcoming_workouts),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            sessions.forEach { session ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (session.source == "GETTING_STARTED") {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                                ) {
+                                    Text(
+                                        stringResource(R.string.getting_started_short_badge),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.secondaryContainer
+                                ) {
+                                    Text(
+                                        stringResource(R.string.getting_started_temporary_badge),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            session.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            session.workoutDate.orEmpty(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                    ) {
+                        Text(
+                            stringResource(R.string.upcoming_status),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             }
         }
     }
@@ -703,12 +1111,12 @@ private fun WeeklyScheduleEmptySection(today: LocalDate, message: String) {
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("This Week", style = MaterialTheme.typography.titleLarge)
-            Text("Your weekly training schedule", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.this_week), style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.weekly_schedule), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text(range, style = MaterialTheme.typography.titleSmall)
         MessageCard(
-            title = "Weekly schedule not shown",
+            title = stringResource(R.string.weekly_schedule_not_shown),
             body = message,
             action = null,
             onAction = {}
@@ -726,14 +1134,14 @@ private fun WeeklyWorkoutDayCard(
     val borderColor = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
     val dayLabel = date.format(DateTimeFormatter.ofPattern("EEE", Locale.getDefault())).uppercase(Locale.getDefault())
     val title = when {
-        day == null -> "Nothing scheduled"
-        day.sessionType.isRest -> "Rest Day"
+        day == null -> stringResource(R.string.nothing_scheduled)
+        day.sessionType.isRest -> stringResource(R.string.rest_day_title)
         else -> day.sessionType.displayName
     }
     val subtitle = when {
-        day == null -> "Not configured in this plan"
-        day.sessionType.isRest -> "Recovery day"
-        else -> "${day.exercises.size} ${if (day.exercises.size == 1) "exercise" else "exercises"}"
+        day == null -> stringResource(R.string.not_configured_plan)
+        day.sessionType.isRest -> stringResource(R.string.recovery_day)
+        else -> pluralStringResource(R.plurals.exercise_count, day.exercises.size)
     }
 
     Card(
@@ -785,7 +1193,7 @@ private fun WeeklyWorkoutDayCard(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
                 ) {
                     Text(
-                        "TODAY",
+                        stringResource(R.string.loc_today_upper),
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
@@ -827,7 +1235,7 @@ private fun ExerciseCard(exercise: UserWorkoutPlanExercise) {
                     ) {
                         Text(exercise.exercise.name, style = MaterialTheme.typography.titleMedium)
                         Text(exercise.prescription, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Rest: ${exercise.restSeconds} seconds", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.rest_label, exercise.restSeconds), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         exercise.notes?.takeIf(String::isNotBlank)?.let {
                             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }

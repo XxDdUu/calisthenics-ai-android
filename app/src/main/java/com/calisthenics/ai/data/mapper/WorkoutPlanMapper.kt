@@ -4,6 +4,7 @@ import com.calisthenics.ai.data.remote.dto.WorkoutPlanDayResponseDto
 import com.calisthenics.ai.data.remote.dto.WorkoutPlanExerciseResponseDto
 import com.calisthenics.ai.data.remote.dto.WorkoutPlanResponseDto
 import com.calisthenics.ai.data.remote.dto.WorkoutPlanTemplateResponseDto
+import com.calisthenics.ai.data.remote.dto.WorkoutPlanAssignmentDto
 import com.calisthenics.ai.domain.model.UserWorkoutPlan
 import com.calisthenics.ai.domain.model.UserWorkoutPlanDay
 import com.calisthenics.ai.domain.model.UserWorkoutPlanExercise
@@ -11,6 +12,8 @@ import com.calisthenics.ai.domain.model.UserWorkoutPlanTemplate
 import com.calisthenics.ai.domain.model.WorkoutDayOfWeek
 import com.calisthenics.ai.domain.model.WorkoutSessionType
 import com.calisthenics.ai.domain.model.WorkoutSplitType
+import com.calisthenics.ai.domain.model.WorkoutPlanAssignment
+import com.calisthenics.ai.domain.model.WorkoutPlanAssignmentStatus
 
 fun WorkoutPlanResponseDto.toDomain(
     dayExercisesMap: Map<Long, List<UserWorkoutPlanExercise>> = emptyMap()
@@ -38,9 +41,26 @@ fun WorkoutPlanResponseDto.toDomain(
         splitType = split,
         createdAt = createdAt,
         updatedAt = updatedAt,
-        days = domainDays
+        days = domainDays,
+        isActive = isActive,
+        startDate = startDate
     )
 }
+
+fun WorkoutPlanAssignmentDto.toAssignmentDomain(): WorkoutPlanAssignment = WorkoutPlanAssignment(
+    id = id,
+    coachName = coachName,
+    startDate = startDate,
+    createdAt = createdAt,
+    workoutPlan = workoutPlan.toDomain().copy(startDate = startDate ?: workoutPlan.startDate),
+    status = WorkoutPlanAssignmentStatus.fromApi(status),
+    coachId = coachId,
+    clientId = clientId ?: athleteId,
+    clientName = clientName,
+    relationshipId = relationshipId,
+    updatedAt = updatedAt,
+    endDate = endDate
+)
 
 fun WorkoutPlanDayResponseDto.toDomain(
     exercises: List<UserWorkoutPlanExercise> = emptyList()

@@ -11,9 +11,14 @@ import com.calisthenics.ai.domain.model.WorkoutPlanSnapshot
 import com.calisthenics.ai.domain.model.WorkoutSessionProgress
 import com.calisthenics.ai.domain.model.WorkoutSessionType
 import com.calisthenics.ai.domain.model.WorkoutSplitType
+import com.calisthenics.ai.domain.model.AiWorkoutPlanPreview
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 interface WorkoutPlanRepository {
+    // Emits when a plan is deleted or a coach relationship ends so active UI screens refresh Room/session caches immediately.
+    val planCacheInvalidations: Flow<Unit> get() = emptyFlow()
+    suspend fun invalidateCoachAssignedPlans() {}
     // Local Room Database / Offline observation methods
     fun observeCachedPlans(): Flow<List<UserWorkoutPlan>>
     fun observeCachedPlan(planId: Long): Flow<UserWorkoutPlan?>
@@ -27,6 +32,29 @@ interface WorkoutPlanRepository {
 
     // Server-backed REST API methods
     suspend fun getPlans(): Result<List<UserWorkoutPlan>>
+    suspend fun getClientPersonalPlans(clientId: Long): Result<List<UserWorkoutPlan>> =
+        Result.success(emptyList())
+    suspend fun assignPlanToClient(relationshipId: Long, planId: Long): Result<Unit> =
+        Result.failure(UnsupportedOperationException("Plan assignment is unavailable."))
+
+    suspend fun assignPlanToClient(
+        relationshipId: Long,
+        planId: Long,
+        startDate: String?,
+        endDate: String?,
+        notes: String?
+    ): Result<Unit> = assignPlanToClient(relationshipId, planId)
+    suspend fun getMyAssignments(): Result<List<com.calisthenics.ai.domain.model.WorkoutPlanAssignment>> =
+        Result.success(emptyList())
+    suspend fun getMyCoachAssignments(): Result<List<com.calisthenics.ai.domain.model.WorkoutPlanAssignment>> =
+        Result.success(emptyList())
+    suspend fun updateAssignmentStatus(
+        assignmentId: Long,
+        status: com.calisthenics.ai.domain.model.WorkoutPlanAssignmentStatus
+    ): Result<com.calisthenics.ai.domain.model.WorkoutPlanAssignment> =
+        Result.failure(UnsupportedOperationException("Assignment status updates are unavailable."))
+    suspend fun getLatestActivePlan(clientId: Long? = null): Result<UserWorkoutPlan?> =
+        getPlans().map { plans -> plans.firstOrNull { it.isActive } }
     suspend fun resolveTodayWorkout(date: String, activePlanId: Long?): Result<TodayWorkoutResolution>
     suspend fun getPlanById(id: Long): Result<UserWorkoutPlan>
     suspend fun getPlanTemplates(): Result<List<UserWorkoutPlanTemplate>>
@@ -76,4 +104,29 @@ interface WorkoutPlanRepository {
         exercises: List<UserWorkoutPlanExercise>
     ): Result<List<UserWorkoutPlanExercise>>
     suspend fun removeExercise(planId: Long, dayId: Long, assignmentId: Long): Result<Unit>
+
+    // AI Workout Planner methods
+    suspend fun generateAiWorkoutPlan(
+        prompt: String,
+        clientId: Long? = null,
+        fitnessLevel: String? = null,
+        preferredSplit: String? = null,
+        startDate: String? = null,
+        durationWeeks: Int? = null
+    ): Result<AiWorkoutPlanPreview> = Result.failure(UnsupportedOperationException("AI workout planner is unavailable."))
+
+    suspend fun modifyAiWorkoutPlan(
+        prompt: String,
+        currentPlan: AiWorkoutPlanPreview,
+        clientId: Long? = null
+    ): Result<AiWorkoutPlanPreview> = Result.failure(UnsupportedOperationException("AI workout planner is unavailable."))
+
+    suspend fun commitAiWorkoutPlan(
+        plan: AiWorkoutPlanPreview,
+        idempotencyKey: String? = null,
+        startDate: String? = null,
+        replaceExisting: Boolean = true,
+        clientId: Long? = null,
+        expectedActivePlanId: Long? = null
+    ): Result<UserWorkoutPlan> = Result.failure(UnsupportedOperationException("AI workout planner is unavailable."))
 }

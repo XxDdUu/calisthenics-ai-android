@@ -1,5 +1,8 @@
 package com.calisthenics.ai.ui.chat.list
 
+import com.calisthenics.ai.R
+
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
@@ -43,6 +47,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -52,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.calisthenics.ai.data.remote.websocket.WebSocketState
+import com.calisthenics.ai.domain.model.AiConversationSummary
 import com.calisthenics.ai.domain.model.ChatContact
 import com.calisthenics.ai.domain.model.ChatConversation
 import com.calisthenics.ai.domain.model.UserPresence
@@ -61,6 +67,7 @@ import com.calisthenics.ai.ui.components.DarkCard
 import com.calisthenics.ai.ui.components.EmptyState
 import com.calisthenics.ai.ui.components.ErrorView
 import com.calisthenics.ai.ui.components.LoadingView
+import com.calisthenics.ai.ui.components.PillBadge
 import com.calisthenics.ai.ui.theme.Accent
 import com.calisthenics.ai.ui.theme.Elevated
 import com.calisthenics.ai.ui.theme.Ink
@@ -71,6 +78,7 @@ import com.calisthenics.ai.ui.theme.SecondaryText
 @Composable
 fun ChatListScreen(
     onConversationClick: (conversationId: Long, otherUserId: Long, otherUserName: String, otherUserAvatarUrl: String?) -> Unit,
+    onAiAssistantClick: () -> Unit = {},
     viewModel: ChatListViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -81,7 +89,7 @@ fun ChatListScreen(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Messages",
+                            text = stringResource(R.string.messages),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = PrimaryText
@@ -109,7 +117,7 @@ fun ChatListScreen(
                         IconButton(onClick = { viewModel.showNewChatDialog() }) {
                             Icon(
                                 imageVector = Icons.Default.Add,
-                                contentDescription = "Start new conversation",
+                                contentDescription = stringResource(R.string.loc_start_new_conversation),
                                 modifier = Modifier.size(24.dp),
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
@@ -118,7 +126,7 @@ fun ChatListScreen(
                         IconButton(onClick = { viewModel.loadConversations(isRefresh = true) }) {
                             Icon(
                                 imageVector = Icons.Default.Refresh,
-                                contentDescription = "Refresh conversations",
+                                contentDescription = stringResource(R.string.loc_refresh_conversations),
                                 modifier = Modifier.size(24.dp),
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
@@ -139,21 +147,13 @@ fun ChatListScreen(
                 .padding(paddingValues)
         ) {
             when {
-                state.isLoading -> {
-                    LoadingView(message = "Loading conversations...")
+                state.isLoading && state.conversations.isEmpty() && state.aiSummary == null -> {
+                    LoadingView(message = stringResource(R.string.loading_conversations))
                 }
-                state.error != null && state.conversations.isEmpty() -> {
+                state.error != null && state.conversations.isEmpty() && state.aiSummary == null -> {
                     ErrorView(
-                        message = state.error ?: "Unable to load conversations",
+                        message = state.error ?: stringResource(R.string.unable_load_conversations),
                         onRetry = { viewModel.loadConversations() }
-                    )
-                }
-                state.conversations.isEmpty() -> {
-                    EmptyState(
-                        title = "No conversations yet",
-                        body = "Connect with a coach or client to start discussing workouts and feedback.",
-                        action = "Start a Chat",
-                        onAction = { viewModel.showNewChatDialog() }
                     )
                 }
                 else -> {
@@ -162,27 +162,100 @@ fun ChatListScreen(
                             .fillMaxSize()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         contentPadding = PaddingValues(bottom = FloatingBottomBarDefaults.ContentBottomPadding),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        items(
-                            items = state.conversations,
-                            key = { it.id }
-                        ) { conversation ->
-                            ConversationRowItem(
-                                conversation = conversation,
-                                presence = state.presences[conversation.otherUserId],
-                                connectionState = state.webSocketState,
-                                isPresenceLoading = state.isPresenceLoading,
-                                presenceError = state.presenceError,
-                                onClick = {
-                                    onConversationClick(
-                                        conversation.id,
-                                        conversation.otherUserId,
-                                        conversation.otherUserName,
-                                        conversation.otherUserAvatarUrl
+                        // 1. AI Assistant Entry prominently placed at the top
+                        item(key = "ai_assistant_entry") {
+                            AiAssistantEntryCard(
+                                summary = state.aiSummary,
+                                onClick = onAiAssistantClick
+                            )
+                        }
+
+                        // 2. Section Header for User Conversations
+                        item(key = "direct_messages_header") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 10.dp, bottom = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Direct Messages",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PrimaryText
+                                )
+                                if (state.conversations.isNotEmpty()) {
+                                    Text(
+                                        text = "${state.conversations.size}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = SecondaryText
                                     )
                                 }
-                            )
+                            }
+                        }
+
+                        // 3. User Conversations List or Empty State
+                        if (state.conversations.isEmpty()) {
+                            item(key = "empty_user_conversations") {
+                                DarkCard(
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(24.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ChatBubbleOutline,
+                                            contentDescription = null,
+                                            tint = SecondaryText,
+                                            modifier = Modifier.size(36.dp)
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.no_conversations),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = PrimaryText
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.connect_chat_hint),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = SecondaryText,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                        TextButton(onClick = { viewModel.showNewChatDialog() }) {
+                                            Text(stringResource(R.string.start_chat), color = Accent)
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            items(
+                                items = state.conversations,
+                                key = { it.id }
+                            ) { conversation ->
+                                ConversationRowItem(
+                                    conversation = conversation,
+                                    presence = state.presences[conversation.otherUserId],
+                                    connectionState = state.webSocketState,
+                                    isPresenceLoading = state.isPresenceLoading,
+                                    presenceError = state.presenceError,
+                                    onClick = {
+                                        onConversationClick(
+                                            conversation.id,
+                                            conversation.otherUserId,
+                                            conversation.otherUserName,
+                                            conversation.otherUserAvatarUrl
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -240,7 +313,7 @@ fun ConversationRowItem(
                 if (!conversation.otherUserAvatarUrl.isNullOrBlank()) {
                     AsyncImage(
                         model = conversation.otherUserAvatarUrl,
-                        contentDescription = "Avatar of ${conversation.otherUserName}",
+                        contentDescription = stringResource(R.string.avatar_of, conversation.otherUserName),
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
@@ -301,7 +374,7 @@ fun ConversationRowItem(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = conversation.lastMessagePreview ?: "No messages yet",
+                        text = conversation.lastMessagePreview ?: stringResource(R.string.loc_no_messages),
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (conversation.unreadCount > 0) PrimaryText else SecondaryText,
                         fontWeight = if (conversation.unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
@@ -343,7 +416,7 @@ fun NewChatDialog(
         onDismissRequest = { if (!isCreating) onDismiss() },
         title = {
             Text(
-                text = "Start a Conversation",
+                text = stringResource(R.string.start_conversation),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = PrimaryText
@@ -365,13 +438,13 @@ fun NewChatDialog(
                     }
                 } else if (contacts.isEmpty()) {
                     Text(
-                        text = "You don't have any active coach or client connections yet. Connect with someone in the coach section to start chatting.",
+                        text = stringResource(R.string.no_active_connections_chat),
                         style = MaterialTheme.typography.bodyMedium,
                         color = SecondaryText
                     )
                 } else {
                     Text(
-                        text = "Select a contact to message:",
+                        text = stringResource(R.string.select_contact),
                         style = MaterialTheme.typography.bodySmall,
                         color = SecondaryText
                     )
@@ -424,9 +497,108 @@ fun NewChatDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss, enabled = !isCreating) {
-                Text("Cancel", color = Accent)
+                Text(stringResource(R.string.cancel), color = Accent)
             }
         },
         containerColor = com.calisthenics.ai.ui.theme.Surface
     )
+}
+
+@Composable
+fun AiAssistantEntryCard(
+    summary: AiConversationSummary?,
+    onClick: () -> Unit
+) {
+    DarkCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        border = BorderStroke(1.dp, Accent.copy(alpha = 0.5f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // AI Avatar with active dot
+            Box(
+                modifier = Modifier.size(50.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(50.dp)
+                        .clip(CircleShape)
+                        .background(Accent),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = "AI Assistant",
+                        tint = Ink,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                // Online pulse indicator
+                Box(
+                    modifier = Modifier
+                        .size(14.dp)
+                        .align(Alignment.BottomEnd)
+                        .clip(CircleShape)
+                        .background(Ink)
+                        .padding(2.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(Accent)
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(14.dp))
+
+            // Info Column
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "AI Assistant",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = PrimaryText
+                        )
+                        PillBadge(text = "AI Coach", isAccent = true)
+                    }
+
+                    val timeLabel = summary?.lastInteractionAt?.let { ChatTimeUtils.formatMessageTime(it) } ?: "Active"
+                    Text(
+                        text = timeLabel,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SecondaryText
+                    )
+                }
+
+                val preview = summary?.lastMessagePreview ?: "Ask about workouts, record PRs, or analyze progress"
+                Text(
+                    text = preview,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = SecondaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
 }

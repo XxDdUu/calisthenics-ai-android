@@ -1,5 +1,9 @@
 package com.calisthenics.ai.ui.home
 
+import com.calisthenics.ai.R
+
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -38,14 +43,41 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.calisthenics.ai.domain.model.AnalysisResult
+import com.calisthenics.ai.ui.components.HomeTopBarActions
 
 @Composable
 fun HomeScreen(
     onStartAnalysis: () -> Unit,
     onSelectHistoryItem: (Long) -> Unit,
+    onNotificationsClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    if (uiState.showProgramDetails) {
+        GettingStartedProgramBottomSheet(
+            program = uiState.publishedProgram,
+            onDismiss = viewModel::closeProgramDetails,
+            onEnroll = viewModel::enrollInProgram,
+            onCompleteDay = viewModel::completeProgramDay,
+            isEnrolling = uiState.isEnrolling
+        )
+    }
+
+    if (uiState.shouldShowOnboardingModal) {
+        LaunchedEffect(uiState.publishedProgram?.id, uiState.publishedProgram?.version) {
+            viewModel.trackModalImpression()
+        }
+        GettingStartedOnboardingModal(
+            program = uiState.publishedProgram,
+            onViewProgram = {
+                viewModel.dismissToCompactBanner()
+                viewModel.openProgramDetails()
+            },
+            onDismiss = viewModel::dismissToCompactBanner
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -53,9 +85,30 @@ fun HomeScreen(
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .padding(horizontal = 24.dp)
-            .padding(top = 28.dp),
+            .padding(top = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.End
+        ) {
+            HomeTopBarActions(
+                unreadCount = uiState.unreadNotificationCount,
+                unreadCountAvailable = uiState.unreadCountAvailable,
+                onNotificationsClick = onNotificationsClick,
+                onProfileClick = onProfileClick
+            )
+        }
+        if (uiState.shouldShowCompactBanner) {
+            GettingStartedCompactBanner(
+                program = uiState.publishedProgram,
+                onViewProgram = viewModel::openProgramDetails,
+                onDismiss = viewModel::permanentlyDismissOnboarding,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+        }
         Box(
             modifier = Modifier
                 .size(72.dp)
@@ -66,7 +119,7 @@ fun HomeScreen(
         ) {
             Icon(
                 imageVector = Icons.Default.FitnessCenter,
-                contentDescription = "Calisthenics AI Logo",
+                contentDescription = stringResource(R.string.loc_calisthenics_ai_logo),
                 tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.fillMaxSize()
             )
@@ -75,7 +128,7 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "Calisthenics AI",
+            text = stringResource(R.string.loc_calisthenics_ai),
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.onBackground
         )
@@ -83,7 +136,7 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Analyze your form with AI.",
+            text = stringResource(R.string.analyze_form_ai),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -106,7 +159,7 @@ fun HomeScreen(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Start Analysis",
+                text = stringResource(R.string.start_analysis),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -121,7 +174,7 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Recent Analyses",
+                    text = stringResource(R.string.recent_analyses),
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onBackground
                 )
@@ -182,7 +235,7 @@ fun HistoryItemCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.Star,
-                        contentDescription = "Score",
+                        contentDescription = stringResource(R.string.loc_score),
                         tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(20.dp)
                     )

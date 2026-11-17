@@ -10,8 +10,17 @@ class AnalyzeVideoUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(
         videoFile: File,
-        exerciseId: Long?
+        exerciseId: Long?,
+        exerciseType: String? = null,
+        idempotencyKey: String? = null,
+        sideView: Boolean = false
     ): Result<AnalysisResult> {
-        return repository.uploadVideoForAnalysis(videoFile, exerciseId)
+        return repository.uploadVideoForAnalysis(
+            videoFile = videoFile,
+            exerciseId = exerciseId,
+            exerciseType = exerciseType,
+            idempotencyKey = idempotencyKey,
+            sideView = sideView
+        )
     }
 }

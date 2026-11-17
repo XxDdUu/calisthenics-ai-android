@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.workoutplan
 
+import com.calisthenics.ai.R
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -77,6 +79,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -125,7 +128,7 @@ fun WorkoutPlanScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Workout Plan", style = MaterialTheme.typography.titleLarge)
+                        Text(stringResource(R.string.workout_plan), style = MaterialTheme.typography.titleLarge)
                         Text(
                             "${state.weekStart.format(weekFormatter)} – ${state.weekStart.plusDays(6).format(weekFormatter)}",
                             style = MaterialTheme.typography.bodySmall,
@@ -135,23 +138,23 @@ fun WorkoutPlanScreen(
                 },
                 actions = {
                     IconButton(onClick = { showPlanDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "Create a new plan")
+                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.create_new_plan))
                     }
                     Box {
                         IconButton(onClick = { overflowExpanded = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "Plan options")
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.plan_options))
                         }
                         androidx.compose.material3.DropdownMenu(
                             expanded = overflowExpanded,
                             onDismissRequest = { overflowExpanded = false }
                         ) {
                             androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("New weekly plan") },
+                                text = { Text(stringResource(R.string.new_weekly_plan)) },
                                 onClick = { overflowExpanded = false; showPlanDialog = true }
                             )
                             if (state.plan != null) {
                                 androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text("Delete plan") },
+                                    text = { Text(stringResource(R.string.delete_plan)) },
                                     onClick = { overflowExpanded = false; confirmDeletePlan = true }
                                 )
                             }
@@ -196,18 +199,18 @@ fun WorkoutPlanScreen(
     }
     if (confirmDeletePlan) {
         ConfirmDialog(
-            title = "Delete workout plan?",
-            message = "This removes the locally saved plan and its completion history from this device.",
-            confirmLabel = "Delete plan",
+            title = stringResource(R.string.delete_workout_plan_question),
+            message = stringResource(R.string.loc_delete_plan_message),
+            confirmLabel = stringResource(R.string.loc_delete_plan_dialog),
             onDismiss = { confirmDeletePlan = false },
             onConfirm = { confirmDeletePlan = false; viewModel.deletePlan() }
         )
     }
     workoutPendingDelete?.let { workout ->
         ConfirmDialog(
-            title = "Remove ${workout.name}?",
-            message = "This workout will no longer be scheduled on ${dayName(workout.weekday)}.",
-            confirmLabel = "Remove",
+            title = stringResource(R.string.loc_remove_workout_question, workout.name),
+            message = stringResource(R.string.loc_remove_assignment_warning),
+            confirmLabel = stringResource(R.string.common_remove),
             onDismiss = { workoutPendingDelete = null },
             onConfirm = { workoutPendingDelete = null; viewModel.removeWorkout(workout.id) }
         )
@@ -239,9 +242,9 @@ fun WorkoutPlanScreen(
     }
     if (showDiscardEditorDialog) {
         ConfirmDialog(
-            title = "Discard workout changes?",
-            message = "Your unsaved workout edits will be lost.",
-            confirmLabel = "Discard",
+            title = stringResource(R.string.discard_workout_changes),
+            message = stringResource(R.string.loc_discard_workout_message),
+            confirmLabel = stringResource(R.string.loc_discard),
             onDismiss = { showDiscardEditorDialog = false },
             onConfirm = { showDiscardEditorDialog = false; viewModel.dismissEditor() }
         )
@@ -286,7 +289,7 @@ private fun WorkoutPlanContent(
         if (state.plan == null) {
             item {
                 EmptyState(
-                    title = "Build your weekly schedule",
+                    title = stringResource(R.string.build_weekly_schedule),
                     body = "Create a plan, then assign workouts and exercises to the days that work for you.",
                     action = "Create plan",
                     onAction = onCreatePlan
@@ -302,7 +305,7 @@ private fun WorkoutPlanContent(
                 )
             }
             item {
-                AnimatedContent(targetState = selectedWorkout, label = "selected workout") { workout ->
+                AnimatedContent(targetState = selectedWorkout, label = stringResource(R.string.loc_selected_workout)) { workout ->
                     if (workout == null) {
                         NoWorkoutCard(onAdd = viewModel::openCreateWorkout)
                     } else {
@@ -319,14 +322,14 @@ private fun WorkoutPlanContent(
                 }
             }
             selectedWorkout?.let { workout ->
-                item { Text("Exercises", style = MaterialTheme.typography.titleLarge) }
+                item { Text(stringResource(R.string.exercises), style = MaterialTheme.typography.titleLarge) }
                 if (workout.exercises.isEmpty()) {
                     item {
                         DarkCard(Modifier.fillMaxWidth()) {
                             EmptyState(
-                                title = "No exercises yet",
+                                title = stringResource(R.string.no_exercises_yet),
                                 body = "Edit this workout to choose exercises from the available library.",
-                                action = "Add exercises",
+                                action = stringResource(R.string.add_exercises),
                                 onAction = { viewModel.openEditWorkout(workout); viewModel.openExercisePicker() }
                             )
                         }
@@ -351,7 +354,7 @@ private fun WorkoutPlanContent(
 private fun DeviceOnlyNotice() {
     AssistChip(
         onClick = {},
-        label = { Text("Saved on this device") },
+        label = { Text(stringResource(R.string.saved_on_device)) },
         leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(16.dp)) }
     )
 }
@@ -364,10 +367,10 @@ private fun WeekControls(weekStart: LocalDate, onPrevious: () -> Unit, onNext: (
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         IconButton(onClick = onPrevious) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Previous week")
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.previous_week))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Training week", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.training_week), style = MaterialTheme.typography.labelLarge)
             Text(
                 "${weekStart.format(weekFormatter)} – ${weekStart.plusDays(6).format(weekFormatter)}",
                 style = MaterialTheme.typography.bodySmall,
@@ -375,9 +378,9 @@ private fun WeekControls(weekStart: LocalDate, onPrevious: () -> Unit, onNext: (
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onToday) { Text("Today") }
+            TextButton(onClick = onToday) { Text(stringResource(R.string.today)) }
             IconButton(onClick = onNext) {
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next week")
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = stringResource(R.string.next_week))
             }
         }
     }
@@ -397,6 +400,7 @@ private fun WeeklyCalendar(
             val hasWorkout = date.dayOfWeek.value in scheduledWeekdays
             val container = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
             val content = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+            val dayDescription = if (hasWorkout) stringResource(R.string.loc_training_day) else stringResource(R.string.loc_rest_day_semantics)
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -404,7 +408,7 @@ private fun WeeklyCalendar(
                     .background(container)
                     .clickable(role = Role.Tab) { onDateClick(date) }
                     .padding(vertical = 10.dp, horizontal = 2.dp)
-                    .semantics { contentDescription = "${date.format(fullDateFormatter)}${if (hasWorkout) ", training day" else ", rest day"}" },
+                    .semantics { contentDescription = "${date.format(fullDateFormatter)}, $dayDescription" },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -430,14 +434,14 @@ private fun WeeklyCalendar(
 private fun WeeklyOverview(overview: WeeklyTrainingOverview) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("This week", style = MaterialTheme.typography.titleLarge)
-            Text("${overview.completionPercent}% complete", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.loc_this_week_lower), style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.loc_completion_percent, overview.completionPercent), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OverviewMetric(Modifier.weight(1f), overview.sessions.toString(), "Sessions")
-            OverviewMetric(Modifier.weight(1f), overview.exercises.toString(), "Exercises")
-            OverviewMetric(Modifier.weight(1f), overview.completedSessions.toString(), "Completed")
-            OverviewMetric(Modifier.weight(1f), "${overview.completionPercent}%", "Progress")
+            OverviewMetric(Modifier.weight(1f), overview.sessions.toString(), stringResource(R.string.workout_sessions))
+            OverviewMetric(Modifier.weight(1f), overview.exercises.toString(), stringResource(R.string.exercises))
+            OverviewMetric(Modifier.weight(1f), overview.completedSessions.toString(), stringResource(R.string.loc_completed))
+            OverviewMetric(Modifier.weight(1f), "${overview.completionPercent}%", stringResource(R.string.loc_progress))
         }
     }
 }
@@ -461,9 +465,9 @@ private fun NoWorkoutCard(onAdd: () -> Unit) {
             horizontalAlignment = Alignment.Start
         ) {
             Icon(Icons.Default.CalendarToday, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Rest day", style = MaterialTheme.typography.titleLarge)
-            Text("No workout is assigned to this day. Add one when you are ready to train.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Button(onClick = onAdd) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("Add workout") }
+            Text(stringResource(R.string.rest_day_lower), style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.loc_no_workout_assigned_detail), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = onAdd) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.add_workout)) }
         }
     }
 }
@@ -487,12 +491,12 @@ private fun WorkoutSummaryCard(
                     Text(workout.category, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (completed) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = "Workout completed", tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Default.CheckCircle, contentDescription = stringResource(R.string.workout_completed), tint = MaterialTheme.colorScheme.primary)
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 WorkoutMeta(Icons.Default.Timer, "${workout.estimatedDurationMinutes} min")
-                WorkoutMeta(Icons.Default.FitnessCenter, "${workout.exercises.size} exercises")
+                WorkoutMeta(Icons.Default.FitnessCenter, stringResource(R.string.exercises_count_label, workout.exercises.size))
             }
             workout.notes.takeIf { it.isNotBlank() }?.let {
                 Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -500,16 +504,16 @@ private fun WorkoutSummaryCard(
             Button(onClick = onStart, modifier = Modifier.fillMaxWidth(), enabled = workout.exercises.isNotEmpty()) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
-                Text(if (workout.exercises.isEmpty()) "Add exercises to start" else "Start workout")
+                Text(if (workout.exercises.isEmpty()) stringResource(R.string.loc_add_exercises_to_start) else stringResource(R.string.start_workout))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = onEdit, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Edit, null, Modifier.size(17.dp)); Text(" Edit") }
-                TextButton(onClick = onDuplicate, modifier = Modifier.weight(1f)) { Icon(Icons.Default.ContentCopy, null, Modifier.size(17.dp)); Text(" Copy") }
-                TextButton(onClick = onComplete, enabled = !completed, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Check, null, Modifier.size(17.dp)); Text(if (completed) " Done" else " Complete") }
+                TextButton(onClick = onEdit, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Edit, null, Modifier.size(17.dp)); Text(stringResource(R.string.loc_edit_spaced)) }
+                TextButton(onClick = onDuplicate, modifier = Modifier.weight(1f)) { Icon(Icons.Default.ContentCopy, null, Modifier.size(17.dp)); Text(stringResource(R.string.loc_copy_spaced)) }
+                TextButton(onClick = onComplete, enabled = !completed, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Check, null, Modifier.size(17.dp)); Text(if (completed) " ${stringResource(R.string.loc_completed)}" else " ${stringResource(R.string.loc_complete)}") }
             }
             TextButton(onClick = onDelete, modifier = Modifier.align(Alignment.End)) {
                 Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(17.dp))
-                Text(" Remove", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.loc_remove_spaced), color = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -536,10 +540,10 @@ private fun ExercisePlanRow(exercise: PlannedExercise, completed: Boolean, onTog
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(exercise.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${exercise.prescription} · ${exercise.restSeconds}s rest", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.loc_rest_seconds, exercise.prescription, exercise.restSeconds), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 exercise.notes.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis) }
             }
-            Icon(Icons.Default.Edit, contentDescription = "Edit exercise", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.loc_edit_exercise_content_description), modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -553,7 +557,7 @@ private fun WorkoutPlanLoading(modifier: Modifier) {
 private fun PlanLoadError(modifier: Modifier, error: String, onRetry: () -> Unit) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         DarkCard(Modifier.padding(24.dp).fillMaxWidth()) {
-            EmptyState("Workout plan unavailable", error, "Retry", onRetry)
+            EmptyState(stringResource(R.string.workout_unavailable), error, stringResource(R.string.common_retry), onRetry)
         }
     }
 }
@@ -572,16 +576,16 @@ private fun PlanNameDialog(
         title = { Text(if (replacesExisting) "Create new weekly plan" else "Create workout plan") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (replacesExisting) Text("Your current locally saved plan will be replaced only after you confirm.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (replacesExisting) Text(stringResource(R.string.loc_local_plan_replaced_confirm), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Plan name") },
+                    label = { Text(stringResource(R.string.plan_name)) },
                     singleLine = true,
                     isError = attemptedSave && name.isBlank(),
-                    supportingText = if (attemptedSave && name.isBlank()) ({ Text("A plan name is required.") }) else null
+                    supportingText = if (attemptedSave && name.isBlank()) ({ Text(stringResource(R.string.plan_name_required)) }) else null
                 )
-                Text("Schedule template", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.loc_schedule_template), style = MaterialTheme.typography.labelLarge)
                 WorkoutPlanTemplate.entries.forEach { option ->
                     FilterChip(
                         selected = template == option,
@@ -594,9 +598,9 @@ private fun PlanNameDialog(
             }
         },
         confirmButton = {
-            Button(onClick = { attemptedSave = true; if (name.isNotBlank()) onConfirm(name, template) }) { Text(if (replacesExisting) "Replace plan" else "Create") }
+            Button(onClick = { attemptedSave = true; if (name.isNotBlank()) onConfirm(name, template) }) { Text(if (replacesExisting) stringResource(R.string.loc_replace_plan) else stringResource(R.string.loc_create)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } }
     )
 }
 
@@ -607,7 +611,7 @@ private fun ConfirmDialog(title: String, message: String, confirmLabel: String, 
         title = { Text(title) },
         text = { Text(message) },
         confirmButton = { Button(onClick = onConfirm) { Text(confirmLabel) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } }
     )
 }
 
@@ -629,17 +633,17 @@ private fun WorkoutEditorSheet(
             modifier = Modifier.fillMaxHeight(.92f).imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Text(if (editor.workoutId == null) if (editor.isDuplicate) "Duplicate workout" else "Add workout" else "Edit workout", style = MaterialTheme.typography.headlineMedium)
+            Text(if (editor.workoutId == null) if (editor.isDuplicate) stringResource(R.string.loc_duplicate_workout) else stringResource(R.string.add_workout) else stringResource(R.string.loc_edit_workout), style = MaterialTheme.typography.headlineMedium)
             OutlinedTextField(
                 value = editor.name,
                 onValueChange = { value -> onEditorChange { it.copy(name = value, nameError = null) } },
-                label = { Text("Workout name") },
+                label = { Text(stringResource(R.string.loc_workout_name)) },
                 isError = editor.nameError != null,
                 supportingText = editor.nameError?.let { { Text(it) } },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
-            Text("Training category", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.loc_training_category), style = MaterialTheme.typography.labelLarge)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 workoutCategories.forEach { category ->
                     FilterChip(
@@ -649,7 +653,7 @@ private fun WorkoutEditorSheet(
                     )
                 }
             }
-            Text("Assigned day", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.loc_assigned_day), style = MaterialTheme.typography.labelLarge)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 (1..7).forEach { weekday ->
                     FilterChip(
@@ -662,7 +666,7 @@ private fun WorkoutEditorSheet(
             OutlinedTextField(
                 value = editor.estimatedDuration,
                 onValueChange = { value -> onEditorChange { it.copy(estimatedDuration = value.filter(Char::isDigit), durationError = null) } },
-                label = { Text("Estimated duration (minutes)") },
+                label = { Text(stringResource(R.string.loc_estimated_duration_minutes)) },
                 isError = editor.durationError != null,
                 supportingText = editor.durationError?.let { { Text(it) } },
                 modifier = Modifier.fillMaxWidth(),
@@ -671,17 +675,17 @@ private fun WorkoutEditorSheet(
             OutlinedTextField(
                 value = editor.notes,
                 onValueChange = { value -> onEditorChange { it.copy(notes = value) } },
-                label = { Text("Workout notes (optional)") },
+                label = { Text(stringResource(R.string.loc_workout_notes_optional)) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2
             )
             HorizontalDivider()
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Exercises", style = MaterialTheme.typography.titleLarge)
-                OutlinedButton(onClick = onAddExercise) { Icon(Icons.Default.Add, null, Modifier.size(17.dp)); Text(" Add") }
+                Text(stringResource(R.string.exercises), style = MaterialTheme.typography.titleLarge)
+                OutlinedButton(onClick = onAddExercise) { Icon(Icons.Default.Add, null, Modifier.size(17.dp)); Text(stringResource(R.string.loc_add_spaced)) }
             }
             if (editor.exercises.isEmpty()) {
-                Text("Choose exercises to add them to this workout.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.loc_choose_exercises_hint), color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 editor.exercises.forEachIndexed { index, exercise ->
                     DraftExerciseEditor(
@@ -695,9 +699,9 @@ private fun WorkoutEditorSheet(
                 }
             }
             Button(onClick = onSave, enabled = !isSaving, modifier = Modifier.fillMaxWidth()) {
-                if (isSaving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text("Save workout")
+                if (isSaving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.save_workout))
             }
-            TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Cancel") }
+            TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text(stringResource(R.string.cancel)) }
             Spacer(Modifier.height(20.dp))
         }
     }
@@ -719,35 +723,35 @@ private fun DraftExerciseEditor(
                     Text(exercise.name, style = MaterialTheme.typography.titleMedium)
                     if (exercise.category.isNotBlank()) Text(exercise.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                IconButton(onClick = { onMove(-1) }, enabled = canMoveUp) { Icon(Icons.AutoMirrored.Filled.Sort, "Move exercise up", Modifier.size(19.dp)) }
-                IconButton(onClick = { onMove(1) }, enabled = canMoveDown) { Icon(Icons.Default.ArrowDownward, "Move exercise down", Modifier.size(19.dp)) }
-                IconButton(onClick = onRemove) { Icon(Icons.Default.Close, "Remove exercise", tint = MaterialTheme.colorScheme.error) }
+                IconButton(onClick = { onMove(-1) }, enabled = canMoveUp) { Icon(Icons.AutoMirrored.Filled.Sort, stringResource(R.string.loc_move_up), Modifier.size(19.dp)) }
+                IconButton(onClick = { onMove(1) }, enabled = canMoveDown) { Icon(Icons.Default.ArrowDownward, stringResource(R.string.loc_move_down), Modifier.size(19.dp)) }
+                IconButton(onClick = onRemove) { Icon(Icons.Default.Close, stringResource(R.string.loc_remove_exercise), tint = MaterialTheme.colorScheme.error) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NumberEditor("Sets", exercise.sets, Modifier.weight(1f)) { onChange(exercise.copy(sets = it)) }
+                NumberEditor(stringResource(R.string.loc_sets_label), exercise.sets, Modifier.weight(1f)) { onChange(exercise.copy(sets = it)) }
                 if (exercise.holdDurationSeconds != null) {
-                    NumberEditor("Seconds", exercise.holdDurationSeconds, Modifier.weight(1f)) { onChange(exercise.copy(holdDurationSeconds = it, repetitions = null)) }
+                    NumberEditor(stringResource(R.string.loc_seconds_short), exercise.holdDurationSeconds, Modifier.weight(1f)) { onChange(exercise.copy(holdDurationSeconds = it, repetitions = null)) }
                 } else {
-                    NumberEditor("Reps", exercise.repetitions ?: 0, Modifier.weight(1f)) { onChange(exercise.copy(repetitions = it, holdDurationSeconds = null)) }
+                    NumberEditor(stringResource(R.string.reps), exercise.repetitions ?: 0, Modifier.weight(1f)) { onChange(exercise.copy(repetitions = it, holdDurationSeconds = null)) }
                 }
-                NumberEditor("Rest", exercise.restSeconds, Modifier.weight(1f)) { onChange(exercise.copy(restSeconds = it)) }
+                NumberEditor(stringResource(R.string.loc_rest_label_short), exercise.restSeconds, Modifier.weight(1f)) { onChange(exercise.copy(restSeconds = it)) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = exercise.holdDurationSeconds == null,
                     onClick = { if (exercise.holdDurationSeconds != null) onChange(exercise.copy(repetitions = 8, holdDurationSeconds = null)) },
-                    label = { Text("Reps") }
+                    label = { Text(stringResource(R.string.reps)) }
                 )
                 FilterChip(
                     selected = exercise.holdDurationSeconds != null,
                     onClick = { if (exercise.holdDurationSeconds == null) onChange(exercise.copy(repetitions = null, holdDurationSeconds = 10)) },
-                    label = { Text("Hold") }
+                    label = { Text(stringResource(R.string.loc_hold)) }
                 )
             }
             OutlinedTextField(
                 value = exercise.notes,
                 onValueChange = { onChange(exercise.copy(notes = it)) },
-                label = { Text("Exercise notes (optional)") },
+                label = { Text(stringResource(R.string.loc_exercise_notes_optional)) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 1
             )
@@ -788,19 +792,19 @@ private fun ExercisePickerSheet(
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxHeight(.9f).imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Add exercises", style = MaterialTheme.typography.headlineMedium)
-                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Close exercise picker") }
+                Text(stringResource(R.string.add_exercises), style = MaterialTheme.typography.headlineMedium)
+                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, stringResource(R.string.common_close)) }
             }
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Search exercises") },
+                label = { Text(stringResource(R.string.loc_search_exercises)) },
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 singleLine = true
             )
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = category == null, onClick = { category = null }, label = { Text("All") })
+                FilterChip(selected = category == null, onClick = { category = null }, label = { Text(stringResource(R.string.common_all)) })
                 listOf("PUSH", "PULL", "CORE", "LEGS", "SKILL", "ISOMETRIC").forEach { value ->
                     FilterChip(selected = category == value, onClick = { category = value }, label = { Text(value.lowercase().replaceFirstChar(Char::titlecase)) })
                 }
@@ -809,12 +813,12 @@ private fun ExercisePickerSheet(
                 loading -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 error != null && exercises.isEmpty() -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Exercise library unavailable", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        OutlinedButton(onClick = onRetry) { Text("Retry") }
+                        Text(stringResource(R.string.exercise_library_unavailable), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        OutlinedButton(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
                     }
                 }
                 visibleExercises.isEmpty() -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text(if (exercises.isEmpty()) "No exercises are available yet." else "No exercises match your search.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (exercises.isEmpty()) stringResource(R.string.loc_no_exercises_available) else stringResource(R.string.loc_no_exercises_match), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 else -> LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(visibleExercises, key = { it.id }) { exercise ->
@@ -831,7 +835,7 @@ private fun ExercisePickerSheet(
                 }
             }
             Button(onClick = { onAdd(selectedIds) }, enabled = selectedIds.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
-                Text("Add ${selectedIds.size} exercise${if (selectedIds.size == 1) "" else "s"}")
+                Text(stringResource(R.string.loc_add_exercise_count, selectedIds.size, if (selectedIds.size == 1) "" else "s"))
             }
             Spacer(Modifier.height(8.dp))
         }

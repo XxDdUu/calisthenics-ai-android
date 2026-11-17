@@ -3,6 +3,8 @@ package com.calisthenics.ai.ui.coach
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.calisthenics.ai.data.local.AccountSessionGuard
+import com.calisthenics.ai.data.local.AccountSessionManager
 import com.calisthenics.ai.data.remote.dto.*
 import com.calisthenics.ai.domain.repository.AnalyticsRepository
 import com.calisthenics.ai.domain.repository.BodyMetricsRepository
@@ -99,7 +101,8 @@ class ClientProgressViewModel @Inject constructor(
     private val analyticsRepository: AnalyticsRepository,
     private val exerciseRepository: ExerciseRepository,
     private val bodyMetricsRepository: BodyMetricsRepository,
-    savedStateHandle: SavedStateHandle
+    savedStateHandle: SavedStateHandle,
+    private val accountSessionManager: AccountSessionManager = AccountSessionManager()
 ) : ViewModel() {
 
     private val clientId: Long = savedStateHandle.get<Long>("clientId")
@@ -109,7 +112,15 @@ class ClientProgressViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ClientProgressUiState())
     val uiState: StateFlow<ClientProgressUiState> = _uiState.asStateFlow()
 
+    private val sessionGuard = AccountSessionGuard(
+        parentScope = viewModelScope,
+        sessionManager = accountSessionManager,
+        onSessionCleared = { _uiState.update { ClientProgressUiState(exercises = it.exercises) } },
+        onSessionActive = { loadData() }
+    )
+
     init {
+        sessionGuard.startObserving()
         loadData()
     }
 
@@ -119,16 +130,21 @@ class ClientProgressViewModel @Inject constructor(
             return
         }
 
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             _uiState.update { it.copy(isLoading = true, error = null) }
             val overviewResult = analyticsRepository.getCoachClientOverview(clientId)
             val prsResult = analyticsRepository.getCoachClientPrRecords(clientId)
                 .recoverCatching { analyticsRepository.getCoachClientPRs(clientId).getOrThrow() }
-            val coachSharedPrsResult = analyticsRepository.getCoachSharedPRs()
+            val coachSharedPrsResult = analyticsRepository.getCoachClientSharedPRs(clientId)
+                .recoverCatching {
+                    analyticsRepository.getCoachSharedPRs().getOrThrow().filter { it.clientUserId == clientId }
+                }
             val exercisesResult = exerciseRepository.getExercises()
+            if (!sessionGuard.isCurrentSession(captured)) return@launchScoped
 
+            val currentCoachId = captured.activeUserId
             val sharedForClient = coachSharedPrsResult.getOrDefault(emptyList())
-                .filter { it.clientUserId == clientId }
+                .filter { it.clientUserId == clientId && (currentCoachId == null || it.coachUserId == 0L || it.coachUserId == currentCoachId) }
 
             val exerciseList = exercisesResult.getOrDefault(emptyList())
             val loadedPrs = prsResult.getOrDefault(emptyList())

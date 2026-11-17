@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -61,7 +62,7 @@ android {
         val googleClientId = (project.findProperty("GOOGLE_WEB_CLIENT_ID") as? String)?.takeIf { it.isNotBlank() }
             ?: localProperties.getProperty("GOOGLE_WEB_CLIENT_ID")?.takeIf { it.isNotBlank() }
             ?: System.getenv("GOOGLE_WEB_CLIENT_ID")?.takeIf { it.isNotBlank() }
-            ?: "610669602436-6vga6qoca1iefspli4o28ets4fgkv68j.apps.googleusercontent.com"
+            ?: "401410597082-lqt3t94tlan0lbvc44kttifma34pjpaq.apps.googleusercontent.com"
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleClientId\"")
     }
 
@@ -170,6 +171,8 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
@@ -212,4 +215,12 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+}
+
+tasks.configureEach {
+    if (name.startsWith("processDev") && name.endsWith("GoogleServices") &&
+        !file("src/dev/google-services.json").exists()
+    ) {
+        enabled = false
+    }
 }

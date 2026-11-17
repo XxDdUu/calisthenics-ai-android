@@ -1,5 +1,7 @@
 package com.calisthenics.ai.domain.model
 
+import com.calisthenics.ai.data.remote.dto.SharedPersonalRecordDto
+
 data class ChatConversation(
     val id: Long,
     val otherUserId: Long,
@@ -29,13 +31,16 @@ data class ChatMessage(
     val createdAt: String,
     val isFromCurrentUser: Boolean = false,
     val clientMessageId: String? = null,
-    val deliveryStatus: MessageDeliveryStatus = MessageDeliveryStatus.SENT
+    val deliveryStatus: MessageDeliveryStatus = MessageDeliveryStatus.SENT,
+    val sharedPr: SharedPersonalRecordDto? = null
 )
 
 data class ChatContact(
     val userId: Long,
     val displayName: String,
-    val roleLabel: String
+    val roleLabel: String,
+    val avatarUrl: String? = null,
+    val experienceLevel: String? = null
 )
 
 enum class UserPresenceStatus {

@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.workoutsession.timer
 
+import com.calisthenics.ai.R
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -27,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -69,7 +72,7 @@ fun TimerSettingsDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Timer Settings: $exerciseName",
+                text = stringResource(R.string.loc_timer_settings_exercise, exerciseName),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -90,12 +93,12 @@ fun TimerSettingsDialog(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Countdown Before Hold",
+                                stringResource(R.string.loc_countdown_before_hold),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                "Get ready before timing starts",
+                                stringResource(R.string.loc_get_ready_before_timing),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -107,7 +110,7 @@ fun TimerSettingsDialog(
                     }
 
                     if (countdownEnabled) {
-                        Text("Duration", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.loc_duration), style = MaterialTheme.typography.labelMedium)
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -119,7 +122,7 @@ fun TimerSettingsDialog(
                                         countdownDuration = preset
                                         customCountdownText = ""
                                     },
-                                    label = { Text("${preset}s") }
+                                    label = { Text(stringResource(R.string.loc_seconds_short, preset)) }
                                 )
                             }
                             FilterChip(
@@ -129,7 +132,7 @@ fun TimerSettingsDialog(
                                         customCountdownText = countdownDuration.toString()
                                     }
                                 },
-                                label = { Text("Custom") }
+                                label = { Text(stringResource(R.string.loc_custom)) }
                             )
                         }
 
@@ -143,7 +146,7 @@ fun TimerSettingsDialog(
                                         if (it in 1..60) countdownDuration = it
                                     }
                                 },
-                                label = { Text("Seconds (1-60)") },
+                                label = { Text(stringResource(R.string.loc_seconds_1_60)) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
@@ -163,12 +166,12 @@ fun TimerSettingsDialog(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Auto Rest Timer",
+                                stringResource(R.string.loc_auto_rest_timer),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                "Automatically starts after completing a set",
+                                stringResource(R.string.loc_auto_rest_timer_description),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -180,7 +183,7 @@ fun TimerSettingsDialog(
                     }
 
                     if (restEnabled) {
-                        Text("Rest Duration", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.loc_rest_duration), style = MaterialTheme.typography.labelMedium)
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -192,7 +195,7 @@ fun TimerSettingsDialog(
                                         restDuration = preset
                                         customRestText = ""
                                     },
-                                    label = { Text("${preset}s") }
+                                    label = { Text(stringResource(R.string.loc_seconds_short, preset)) }
                                 )
                             }
                             FilterChip(
@@ -202,7 +205,7 @@ fun TimerSettingsDialog(
                                         customRestText = restDuration.toString()
                                     }
                                 },
-                                label = { Text("Custom") }
+                                label = { Text(stringResource(R.string.loc_custom)) }
                             )
                         }
 
@@ -216,7 +219,7 @@ fun TimerSettingsDialog(
                                         if (it in 5..3600) restDuration = it
                                     }
                                 },
-                                label = { Text("Seconds (5-3600)") },
+                                label = { Text(stringResource(R.string.loc_seconds_5_3600)) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
@@ -230,7 +233,7 @@ fun TimerSettingsDialog(
                 // Signals & Feedback
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Feedback",
+                        stringResource(R.string.loc_feedback),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -239,7 +242,7 @@ fun TimerSettingsDialog(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Sound Feedback")
+                        Text(stringResource(R.string.loc_sound_feedback))
                         Switch(
                             checked = soundEnabled,
                             onCheckedChange = { soundEnabled = it }
@@ -250,7 +253,7 @@ fun TimerSettingsDialog(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Vibration Feedback")
+                        Text(stringResource(R.string.loc_vibration_feedback))
                         Switch(
                             checked = vibrationEnabled,
                             onCheckedChange = { vibrationEnabled = it }
@@ -281,12 +284,12 @@ fun TimerSettingsDialog(
                     )
                 }
             ) {
-                Text("Save")
+                Text(stringResource(R.string.common_save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         }
     )

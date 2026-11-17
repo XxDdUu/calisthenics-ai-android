@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.coach
 
+import com.calisthenics.ai.R
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,11 +37,12 @@ import com.calisthenics.ai.ui.theme.*
 @Composable
 fun ClientProgressScreen(
     onBack: () -> Unit,
+    initialTab: Int = 0,
     viewModel: ClientProgressViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    var selectedSectionTab by remember { mutableIntStateOf(0) } // 0: PRs & Progression, 1: Shared PRs, 2: Exercise History
+    var selectedSectionTab by remember(initialTab) { mutableIntStateOf(initialTab.coerceIn(0, 3)) } // 0: PRs & Progression, 1: Shared PRs, 2: Exercise History
 
     LaunchedEffect(state.feedbackSuccessMessage, state.error) {
         state.feedbackSuccessMessage?.let {
@@ -56,7 +60,7 @@ fun ClientProgressScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Client Analytics & PRs",
+                        stringResource(R.string.loc_client_analytics_prs),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryText
@@ -64,7 +68,7 @@ fun ClientProgressScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PrimaryText)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back), tint = PrimaryText)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)
@@ -81,9 +85,9 @@ fun ClientProgressScreen(
             }
             state.overview == null && state.exerciseProgress == null && state.clientPrs.isEmpty() -> {
                 EmptyState(
-                    title = "Progress Unavailable",
-                    body = state.error ?: "Client has not completed any recorded workouts yet.",
-                    action = "Retry",
+                    title = stringResource(R.string.loc_progress_unavailable),
+                    body = state.error ?: stringResource(R.string.loc_client_no_workouts),
+                    action = stringResource(R.string.common_retry),
                     onAction = { viewModel.loadData() }
                 )
             }
@@ -106,7 +110,7 @@ fun ClientProgressScreen(
                         ) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Text(
-                                    "Training Consistency & Volume",
+                                    stringResource(R.string.loc_training_consistency_volume),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = PrimaryText
@@ -116,22 +120,22 @@ fun ClientProgressScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     StatCard(
-                                        label = "Workouts",
+                                        label = stringResource(R.string.workouts),
                                         value = (overview?.totalWorkoutsCompleted ?: 0).toString(),
                                         modifier = Modifier.weight(1f)
                                     )
                                     StatCard(
-                                        label = "Streak",
+                                        label = stringResource(R.string.streak),
                                         value = "${overview?.currentStreakDays ?: 0}d",
                                         modifier = Modifier.weight(1f)
                                     )
                                     StatCard(
-                                        label = "Active Days",
+                                        label = stringResource(R.string.loc_active_days),
                                         value = "${overview?.activeDaysThisMonth ?: 0}d",
                                         modifier = Modifier.weight(1f)
                                     )
                                     StatCard(
-                                        label = "Volume",
+                                        label = stringResource(R.string.loc_volume),
                                         value = "${(overview?.totalVolumeKg ?: 0.0).toInt()}kg",
                                         modifier = Modifier.weight(1f)
                                     )
@@ -148,7 +152,7 @@ fun ClientProgressScreen(
                                 .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            listOf("Client PRs & Charts", "Shared PRs & Feedback", "Exercise Sessions", "Body Metrics").forEachIndexed { index, title ->
+                            listOf(stringResource(R.string.loc_client_prs_charts), stringResource(R.string.loc_shared_prs_feedback_tab), stringResource(R.string.loc_exercise_sessions_tab), stringResource(R.string.loc_body_metrics_tab)).forEachIndexed { index, title ->
                                 FilterChip(
                                     selected = selectedSectionTab == index,
                                     onClick = { selectedSectionTab = index },
@@ -168,7 +172,7 @@ fun ClientProgressScreen(
                                         selectedFilter = state.selectedFilter,
                                         onFilterSelected = { viewModel.onFilterSelected(it) },
                                         unit = state.clientPrHistory.firstOrNull()?.unit ?: "units",
-                                        title = "Client PR Progression"
+                                        title = stringResource(R.string.loc_client_pr_progression)
                                     )
                                 }
                             }
@@ -197,7 +201,7 @@ fun ClientProgressScreen(
                                 item {
                                     DarkCard(Modifier.fillMaxWidth()) {
                                         Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
-                                            Text("No personal records recorded by this client yet.", color = SecondaryText, fontSize = 13.sp)
+                                            Text(stringResource(R.string.loc_no_client_prs), color = SecondaryText, fontSize = 13.sp)
                                         }
                                     }
                                 }
@@ -239,9 +243,9 @@ fun ClientProgressScreen(
                                                     modifier = Modifier.fillMaxWidth(),
                                                     horizontalArrangement = Arrangement.SpaceBetween
                                                 ) {
-                                                    Text("Achieved: ${pr.achievedAt.take(10)}", fontSize = 12.sp, color = SecondaryText)
+                                                    Text(stringResource(R.string.loc_achieved_date, pr.achievedAt.take(10)), fontSize = 12.sp, color = SecondaryText)
                                                     pr.improvementPercentage?.let { pct ->
-                                                        if (pct > 0) Text("+$pct% improvement", fontSize = 11.sp, color = Accent)
+                                                        if (pct > 0) Text(stringResource(R.string.loc_improvement_percent, pct.toString()), fontSize = 11.sp, color = Accent)
                                                     }
                                                 }
                                                 pr.notes?.takeIf { it.isNotBlank() }?.let { notes ->
@@ -258,7 +262,7 @@ fun ClientProgressScreen(
                             // Section 1: Shared PRs & Coach Feedback Section
                             item {
                                 Text(
-                                    "Shared PRs & Feedback (${state.sharedPrs.size})",
+                                    stringResource(R.string.loc_shared_pr_feedback, state.sharedPrs.size),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = PrimaryText
@@ -269,7 +273,7 @@ fun ClientProgressScreen(
                                 item {
                                     DarkCard(Modifier.fillMaxWidth()) {
                                         Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                                            Text("No PRs shared by client yet.", color = SecondaryText, fontSize = 13.sp)
+                                            Text(stringResource(R.string.loc_no_shared_prs), color = SecondaryText, fontSize = 13.sp)
                                         }
                                     }
                                 }
@@ -293,18 +297,18 @@ fun ClientProgressScreen(
                                             ) {
                                                 Column {
                                                     Text(
-                                                        share.personalRecord.exerciseName.ifEmpty { "Exercise Record" },
+                                                        share.personalRecord.exerciseName.ifEmpty { stringResource(R.string.loc_exercise_record_fallback) },
                                                         fontWeight = FontWeight.Bold,
                                                         color = PrimaryText,
                                                         style = MaterialTheme.typography.bodyLarge
                                                     )
                                                     if (share.sharedAt.isNotBlank()) {
-                                                        Text("Shared ${share.sharedAt.take(16)}", fontSize = 11.sp, color = SecondaryText)
+                                                        Text(stringResource(R.string.loc_shared_date, share.sharedAt.take(16)), fontSize = 11.sp, color = SecondaryText)
                                                     }
                                                 }
                                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                                                     if (!share.isRead) {
-                                                        PillBadge("NEW", isAccent = true)
+                                                        PillBadge(stringResource(R.string.loc_new_badge), isAccent = true)
                                                     }
                                                     PillBadge(
                                                         share.personalRecord.recordType.replace("MAX_", "").replace('_', ' ').ifEmpty { "PR" },
@@ -326,7 +330,7 @@ fun ClientProgressScreen(
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Text("Performance Rating:", fontSize = 12.sp, color = SecondaryText)
+                                                Text(stringResource(R.string.loc_performance_rating), fontSize = 12.sp, color = SecondaryText)
                                                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                                     (1..5).forEach { star ->
                                                         val isSelected = star <= selectedRating
@@ -345,7 +349,7 @@ fun ClientProgressScreen(
                                                 OutlinedTextField(
                                                     value = feedbackInput,
                                                     onValueChange = { feedbackInput = it },
-                                                    placeholder = { Text("Leave coach feedback on this PR...", fontSize = 12.sp, color = SecondaryText) },
+                                                    placeholder = { Text(stringResource(R.string.loc_leave_coach_feedback), fontSize = 12.sp, color = SecondaryText) },
                                                     modifier = Modifier.fillMaxWidth(),
                                                     maxLines = 3
                                                 )
@@ -355,9 +359,9 @@ fun ClientProgressScreen(
                                                         enabled = !state.feedbackSubmitting && feedbackInput.isNotBlank(),
                                                         colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink)
                                                     ) {
-                                                        Icon(Icons.Default.Send, contentDescription = "Submit", modifier = Modifier.size(14.dp))
+                                                        Icon(Icons.Default.Send, contentDescription = stringResource(R.string.loc_submit), modifier = Modifier.size(14.dp))
                                                         Spacer(Modifier.width(4.dp))
-                                                        Text(if (share.coachFeedback != null) "Update Feedback" else "Submit Feedback", fontSize = 12.sp)
+                                                        Text(if (share.coachFeedback != null) stringResource(R.string.loc_submit_or_update_feedback) else stringResource(R.string.loc_submit_feedback_button), fontSize = 12.sp)
                                                     }
                                                 }
                                             }
@@ -377,7 +381,7 @@ fun ClientProgressScreen(
                                             selectedFilter = state.selectedFilter,
                                             onFilterSelected = { viewModel.onFilterSelected(it) },
                                             unit = "kg",
-                                            title = "${progress.exerciseName} Training Volume"
+                                            title = stringResource(R.string.loc_exercise_training_volume, progress.exerciseName)
                                         )
                                     }
                                 }
@@ -403,14 +407,14 @@ fun ClientProgressScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
-                                                "Current Body Status",
+                                                stringResource(R.string.loc_current_body_status),
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold,
                                                 color = PrimaryText
                                             )
                                             currentMetrics?.measuredAt?.let { ts ->
                                                 PillBadge(
-                                                    text = "Updated: ${ts.take(10)}",
+                                                    text = stringResource(R.string.loc_updated_at, ts.take(10)),
                                                     isAccent = false
                                                 )
                                             }
@@ -421,13 +425,13 @@ fun ClientProgressScreen(
                                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                                         ) {
                                             StatCard(
-                                                label = "Height",
-                                                value = bodyMetrics?.currentHeightCm?.let { "$it cm" } ?: "Not set",
+                                                label = stringResource(R.string.loc_height),
+                                                value = bodyMetrics?.currentHeightCm?.let { "$it cm" } ?: stringResource(R.string.loc_not_set),
                                                 modifier = Modifier.weight(1f)
                                             )
                                             StatCard(
-                                                label = "Current Weight",
-                                                value = currentMetrics?.weightKg?.let { "$it kg" } ?: "Not recorded",
+                                                label = stringResource(R.string.loc_current_weight),
+                                                value = currentMetrics?.weightKg?.let { "$it kg" } ?: stringResource(R.string.loc_not_recorded),
                                                 modifier = Modifier.weight(1f)
                                             )
                                         }
@@ -439,7 +443,7 @@ fun ClientProgressScreen(
                             item {
                                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                     Text(
-                                        "Body Metric Progression",
+                                        stringResource(R.string.loc_body_metric_progression),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = PrimaryText
@@ -456,7 +460,7 @@ fun ClientProgressScreen(
                                             FilterChip(
                                                 selected = state.selectedBodyMetric == metric,
                                                 onClick = { viewModel.onBodyMetricSelected(metric) },
-                                                label = { Text("${metric.displayName} (${metric.unit})") }
+                                                label = { Text(stringResource(R.string.loc_metric_label, metric.displayName, metric.unit)) }
                                             )
                                         }
                                     }
@@ -467,7 +471,7 @@ fun ClientProgressScreen(
                                             selectedFilter = state.selectedBodyMetricFilter,
                                             onFilterSelected = { viewModel.onBodyMetricFilterSelected(it) },
                                             unit = state.selectedBodyMetric.unit,
-                                            title = "${state.selectedBodyMetric.displayName} Progress"
+                                            title = stringResource(R.string.loc_progress_named_title, state.selectedBodyMetric.displayName)
                                         )
                                     } else {
                                         DarkCard(Modifier.fillMaxWidth()) {
@@ -478,7 +482,7 @@ fun ClientProgressScreen(
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Text(
-                                                    "No ${state.selectedBodyMetric.displayName.lowercase()} measurements recorded for this period.",
+                                                    stringResource(R.string.loc_no_measurements_named, state.selectedBodyMetric.displayName.lowercase()),
                                                     color = SecondaryText,
                                                     style = MaterialTheme.typography.bodyMedium
                                                 )
@@ -491,7 +495,7 @@ fun ClientProgressScreen(
                             // Historical records list
                             item {
                                 Text(
-                                    "Recorded Measurements (${measurements.size})",
+                                    stringResource(R.string.loc_recorded_measurements_count, measurements.size),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = PrimaryText
@@ -508,7 +512,7 @@ fun ClientProgressScreen(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
-                                                "Client has not recorded any body measurements yet.",
+                                                stringResource(R.string.loc_client_body_metrics_empty),
                                                 color = SecondaryText,
                                                 fontSize = 13.sp
                                             )
@@ -541,11 +545,11 @@ fun ClientProgressScreen(
                                             }
 
                                             val details = listOfNotNull(
-                                                measurement.bodyFatPercentage?.let { "Body Fat: $it%" },
-                                                measurement.waistCm?.let { "Waist: $it cm" },
-                                                measurement.chestCm?.let { "Chest: $it cm" },
-                                                measurement.armCm?.let { "Arm: $it cm" },
-                                                measurement.thighCm?.let { "Thigh: $it cm" }
+                                                measurement.bodyFatPercentage?.let { stringResource(R.string.loc_body_fat_label, it.toString()) },
+                                                measurement.waistCm?.let { stringResource(R.string.loc_waist_label, it.toString()) },
+                                                measurement.chestCm?.let { stringResource(R.string.loc_chest_label, it.toString()) },
+                                                measurement.armCm?.let { stringResource(R.string.loc_arm_label, it.toString()) },
+                                                measurement.thighCm?.let { stringResource(R.string.loc_thigh_label, it.toString()) }
                                             )
 
                                             if (details.isNotEmpty()) {

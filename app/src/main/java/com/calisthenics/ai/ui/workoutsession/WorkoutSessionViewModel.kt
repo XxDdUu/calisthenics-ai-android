@@ -3,6 +3,10 @@ package com.calisthenics.ai.ui.workoutsession
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.calisthenics.ai.data.local.AccountSessionGuard
+import com.calisthenics.ai.data.local.AccountSessionManager
+import com.calisthenics.ai.data.local.SetLoggingMode
+import com.calisthenics.ai.data.local.WorkoutExperiencePreferences
 import com.calisthenics.ai.data.local.WorkoutTimerPreferences
 import com.calisthenics.ai.domain.model.WorkoutSession
 import com.calisthenics.ai.domain.model.WorkoutSessionExercise
@@ -41,7 +45,10 @@ data class WorkoutSessionUiState(
     val activeTimer: ActiveTimerState = ActiveTimerState(),
     val isTimerSettingsDialogVisible: Boolean = false,
     val activeTimerConfig: ExerciseTimerConfig = ExerciseTimerConfig(),
-    val activeConfigExerciseName: String = ""
+    val activeConfigExerciseName: String = "",
+    val loggingMode: SetLoggingMode = SetLoggingMode.STEP_BY_STEP,
+    val selectedExerciseIndex: Int = 0,
+    val selectedSetIndex: Int = 0
 )
 
 @HiltViewModel
@@ -51,7 +58,9 @@ class WorkoutSessionViewModel @Inject constructor(
     private val timerPreferences: WorkoutTimerPreferences,
     private val audioHapticHelper: WorkoutAudioHapticHelper,
     private val notificationHelper: WorkoutNotificationHelper,
-    private val timeSource: TimeSource
+    private val timeSource: TimeSource,
+    private val accountSessionManager: AccountSessionManager = AccountSessionManager(),
+    private val workoutExperiencePreferences: WorkoutExperiencePreferences? = null
 ) : ViewModel() {
 
     private val date = checkNotNull(savedStateHandle.get<String>("date"))
@@ -77,20 +86,89 @@ class WorkoutSessionViewModel @Inject constructor(
     private var restTargetMonotonicMs: Long = 0L
     private var restRemainingMillisOnPause: Long = 0L
 
+    private val sessionGuard = AccountSessionGuard(
+        parentScope = viewModelScope,
+        sessionManager = accountSessionManager,
+        onSessionCleared = {
+            saveJobs.values.forEach { it.cancel() }
+            saveJobs.clear()
+            draftJobs.values.forEach { it.cancel() }
+            draftJobs.clear()
+            timerJob?.cancel()
+            countdownTickerJob?.cancel()
+            holdTickerJob?.cancel()
+            restTickerJob?.cancel()
+            _uiState.value = WorkoutSessionUiState(isLoading = false)
+        }
+    )
+
     init {
+        sessionGuard.startObserving()
+        observePreferences()
         load()
     }
 
+    private fun observePreferences() {
+        workoutExperiencePreferences?.let { prefs ->
+            viewModelScope.launch {
+                prefs.setLoggingMode.collect { mode ->
+                    _uiState.update { it.copy(loggingMode = mode) }
+                }
+            }
+        }
+    }
+
     private fun load() {
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             val result = if (existingSessionId != null) {
-                sessionRepository.getSession(existingSessionId)
+                sessionRepository.getSession(existingSessionId).fold(
+                    onSuccess = { loaded ->
+                        if (loaded.status.equals("CANCELLED", ignoreCase = true) ||
+                            loaded.status.equals("CANCELED", ignoreCase = true)
+                        ) {
+                            Result.failure(
+                                IllegalStateException(
+                                    "This coach-assigned workout was cancelled because the coaching relationship ended."
+                                )
+                            )
+                        } else {
+                            val pId = loaded.workoutPlanId
+                            val dId = loaded.workoutPlanDayId
+                            if (loaded.exercises.isEmpty() && pId != null && pId > 0L && dId != null && dId > 0L) {
+                                sessionRepository.startOrResume(
+                                    pId,
+                                    dId,
+                                    loaded.workoutDate?.takeIf(String::isNotBlank) ?: date,
+                                    loaded.assignmentId
+                                )
+                            } else if (
+                                loaded.status.equals("SCHEDULED", ignoreCase = true) &&
+                                (loaded.source == "GETTING_STARTED" ||
+                                    ((pId == null || pId <= 0L) && (dId == null || dId <= 0L)))
+                            ) {
+                                sessionRepository.startScheduledSession(loaded.id)
+                            } else {
+                                Result.success(loaded)
+                            }
+                        }
+                    },
+                    onFailure = { Result.failure(it) }
+                )
             } else if (planId > 0L && dayId > 0L) {
                 sessionRepository.startOrResume(planId, dayId, date, assignmentId)
             } else {
                 Result.failure(IllegalStateException("This workout is missing its scheduled plan information."))
             }
+            if (!sessionGuard.isCurrentSession(captured)) return@launchScoped
             result.onSuccess { session ->
+                val initialExIndex = session.exercises.indexOfFirst { ex ->
+                    ex.status != "COMPLETED" && ex.status != "SKIPPED"
+                }.let { if (it == -1) 0 else it }
+                val targetEx = session.exercises.getOrNull(initialExIndex)
+                val initialSetIndex = targetEx?.sets?.indexOfFirst { !it.completed }?.let {
+                    if (it == -1) 0 else it
+                } ?: 0
+
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -98,6 +176,8 @@ class WorkoutSessionViewModel @Inject constructor(
                         elapsedSeconds = elapsedSeconds(session.startedAt),
                         hasUnsyncedChanges = sessionRepository.hasPendingChanges(session.id),
                         hasSyncConflict = sessionRepository.hasSyncConflict(session.id),
+                        selectedExerciseIndex = initialExIndex,
+                        selectedSetIndex = initialSetIndex,
                         error = null
                     )
                 }
@@ -804,59 +884,155 @@ class WorkoutSessionViewModel @Inject constructor(
         })
     }
 
-    private fun WorkoutSession.updateSet(
-        exerciseId: Long,
-        setId: Long,
-        update: WorkoutSessionSetUpdate
-    ): WorkoutSession? {
-        if (status != "IN_PROGRESS") return null
-        var found = false
-        val updatedExercises = exercises.map { exercise ->
-            if (exercise.id != exerciseId) exercise else {
-                val updatedSets = exercise.sets.map { set ->
-                    if (set.id != setId) set else {
-                        found = true
-                        set.copy(
-                            reps = update.reps,
-                            holdDurationSeconds = update.holdDurationSeconds,
-                            weightKg = update.weightKg,
-                            assistanceWeightKg = update.assistanceWeightKg,
-                            completed = update.completed,
-                            completedAt = if (update.completed) java.time.Instant.now().toString() else null,
-                            notes = update.notes
-                        )
-                    }
-                }
-                exercise.copy(
-                    sets = updatedSets,
-                    status = if (updatedSets.all { it.completed }) "COMPLETED" else "IN_PROGRESS"
+    fun setLoggingMode(mode: SetLoggingMode) {
+        _uiState.update { it.copy(loggingMode = mode) }
+        viewModelScope.launch {
+            workoutExperiencePreferences?.setSetLoggingMode(mode)
+        }
+    }
+
+    fun selectExercise(index: Int) {
+        val exercises = _uiState.value.session?.exercises ?: return
+        if (exercises.isEmpty()) return
+        val clamped = index.coerceIn(0, exercises.size - 1)
+        _uiState.update {
+            it.copy(
+                selectedExerciseIndex = clamped,
+                selectedSetIndex = 0
+            )
+        }
+    }
+
+    fun selectSet(index: Int) {
+        val session = _uiState.value.session ?: return
+        val currentEx = session.exercises.getOrNull(_uiState.value.selectedExerciseIndex) ?: return
+        if (currentEx.sets.isEmpty()) return
+        val clamped = index.coerceIn(0, currentEx.sets.size - 1)
+        _uiState.update { it.copy(selectedSetIndex = clamped) }
+    }
+
+    fun nextSet() {
+        val session = _uiState.value.session ?: return
+        val currentEx = session.exercises.getOrNull(_uiState.value.selectedExerciseIndex) ?: return
+        if (_uiState.value.selectedSetIndex < currentEx.sets.size - 1) {
+            _uiState.update { it.copy(selectedSetIndex = it.selectedSetIndex + 1) }
+        }
+    }
+
+    fun prevSet() {
+        if (_uiState.value.selectedSetIndex > 0) {
+            _uiState.update { it.copy(selectedSetIndex = it.selectedSetIndex - 1) }
+        }
+    }
+
+    fun nextExercise() {
+        val session = _uiState.value.session ?: return
+        if (_uiState.value.selectedExerciseIndex < session.exercises.size - 1) {
+            _uiState.update {
+                it.copy(
+                    selectedExerciseIndex = it.selectedExerciseIndex + 1,
+                    selectedSetIndex = 0
                 )
             }
         }
-        if (!found) return null
-        val completed = updatedExercises.count { it.status == "COMPLETED" }
-        val skipped = updatedExercises.count { it.status == "SKIPPED" }
-        val unfinished = updatedExercises.count {
-            it.status == "IN_PROGRESS" || it.status == "INCOMPLETE"
-        }
-        return copy(
-            exercises = updatedExercises,
-            completedExercises = completed,
-            skippedExercises = skipped,
-            unfinishedExercises = unfinished
-        )
     }
 
-    private fun WorkoutSession.updateExerciseStatus(exerciseId: Long, status: String): WorkoutSession? {
-        if (this.status != "IN_PROGRESS") return null
-        val updated = exercises.map { if (it.id == exerciseId) it.copy(status = status) else it }
-        if (updated == exercises) return null
-        return copy(
-            exercises = updated,
-            completedExercises = updated.count { it.status == "COMPLETED" },
-            skippedExercises = updated.count { it.status == "SKIPPED" },
-            unfinishedExercises = updated.count { it.status == "IN_PROGRESS" || it.status == "INCOMPLETE" }
-        )
+    fun prevExercise() {
+        if (_uiState.value.selectedExerciseIndex > 0) {
+            _uiState.update {
+                it.copy(
+                    selectedExerciseIndex = it.selectedExerciseIndex - 1,
+                    selectedSetIndex = 0
+                )
+            }
+        }
+    }
+
+    fun completeSetAndAdvance(
+        exerciseId: Long,
+        setId: Long,
+        update: WorkoutSessionSetUpdate
+    ) {
+        updateSet(exerciseId, setId, update.copy(completed = true), immediate = true)
+
+        val session = _uiState.value.session ?: return
+        val exIndex = session.exercises.indexOfFirst { it.id == exerciseId }
+        if (exIndex == -1) return
+        val exercise = session.exercises[exIndex]
+        val setIndex = exercise.sets.indexOfFirst { it.id == setId }
+
+        if (setIndex in 0 until exercise.sets.size - 1) {
+            _uiState.update {
+                it.copy(
+                    selectedExerciseIndex = exIndex,
+                    selectedSetIndex = setIndex + 1
+                )
+            }
+        } else if (exIndex in 0 until session.exercises.size - 1) {
+            _uiState.update {
+                it.copy(
+                    selectedExerciseIndex = exIndex + 1,
+                    selectedSetIndex = 0
+                )
+            }
+        }
+    }
+
+    fun addSet(exerciseId: Long) {
+        val current = _uiState.value.session ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true, error = null) }
+            sessionRepository.addSet(current.id, exerciseId)
+                .onSuccess { updatedSession ->
+                    val exIndex = updatedSession.exercises.indexOfFirst { it.id == exerciseId }
+                    val targetEx = updatedSession.exercises.getOrNull(exIndex)
+                    val newSetIndex = (targetEx?.sets?.size ?: 1) - 1
+                    _uiState.update {
+                        it.copy(
+                            session = updatedSession,
+                            isSaving = false,
+                            selectedExerciseIndex = if (exIndex != -1) exIndex else it.selectedExerciseIndex,
+                            selectedSetIndex = newSetIndex.coerceAtLeast(0)
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            isSaving = false,
+                            error = error.localizedMessage ?: "Could not add set."
+                        )
+                    }
+                }
+        }
+    }
+
+    fun deleteSet(exerciseId: Long, setId: Long) {
+        val current = _uiState.value.session ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true, error = null) }
+            sessionRepository.deleteSet(current.id, exerciseId, setId)
+                .onSuccess { updatedSession ->
+                    val exIndex = updatedSession.exercises.indexOfFirst { it.id == exerciseId }
+                    val targetEx = updatedSession.exercises.getOrNull(exIndex)
+                    val setsCount = targetEx?.sets?.size ?: 1
+                    _uiState.update {
+                        it.copy(
+                            session = updatedSession,
+                            isSaving = false,
+                            selectedSetIndex = it.selectedSetIndex.coerceIn(0, (setsCount - 1).coerceAtLeast(0))
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            isSaving = false,
+                            error = error.localizedMessage ?: "Could not delete set."
+                        )
+                    }
+                }
+        }
     }
 
     public override fun onCleared() {

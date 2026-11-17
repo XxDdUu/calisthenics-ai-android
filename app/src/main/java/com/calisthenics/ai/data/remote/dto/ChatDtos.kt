@@ -23,6 +23,7 @@ data class ChatMessageDto(
     @SerializedName("content") val content: String,
     @SerializedName("clientMessageId") val clientMessageId: String? = null,
     @SerializedName("messageType") val messageType: String = "TEXT",
+    @SerializedName("sharedPersonalRecord") val sharedPersonalRecord: SharedPersonalRecordDto? = null,
     @SerializedName("createdAt") val createdAt: String
 )
 
@@ -60,5 +61,7 @@ data class CoachClientRelationshipDto(
     @SerializedName("requestedBy") val requestedBy: Long,
     @SerializedName("status") val status: String,
     @SerializedName("createdAt") val createdAt: String? = null,
-    @SerializedName("updatedAt") val updatedAt: String? = null
+    @SerializedName("updatedAt") val updatedAt: String? = null,
+    @SerializedName("coachGender") val coachGender: String? = null,
+    @SerializedName("clientGender") val clientGender: String? = null
 )

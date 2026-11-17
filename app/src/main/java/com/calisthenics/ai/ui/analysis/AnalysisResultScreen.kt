@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.analysis
 
+import com.calisthenics.ai.R
+
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -12,6 +14,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -42,12 +45,14 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
@@ -59,10 +64,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -79,6 +86,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -103,11 +111,16 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.calisthenics.ai.BuildConfig
 import com.calisthenics.ai.domain.model.AnalysisResult
+import com.calisthenics.ai.domain.model.CameraQuality
 import com.calisthenics.ai.domain.model.ComponentScores
 import com.calisthenics.ai.domain.model.FrameMetric
+import com.calisthenics.ai.domain.model.IssueSeverity
 import com.calisthenics.ai.domain.model.KeypointFrameModel
 import com.calisthenics.ai.domain.model.KeypointItemModel
+import com.calisthenics.ai.domain.model.MovementMetric
+import com.calisthenics.ai.domain.model.RepBreakdown
 import com.calisthenics.ai.domain.model.StabilityMetrics
+import com.calisthenics.ai.domain.model.StructuredIssue
 import com.calisthenics.ai.domain.model.VideoKeypointsDataModel
 import com.calisthenics.ai.domain.model.VideoMetadata
 import com.calisthenics.ai.ui.components.ErrorView
@@ -169,7 +182,7 @@ fun AnalysisResultScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "AI Video Analysis",
+                        text = stringResource(R.string.loc_ai_video_analysis),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = PrimaryText
@@ -179,7 +192,7 @@ fun AnalysisResultScreen(
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.common_back),
                             tint = PrimaryText
                         )
                     }
@@ -191,7 +204,7 @@ fun AnalysisResultScreen(
     ) { padding ->
         when {
             uiState.isLoading -> LoadingView(
-                message = "Retrieving AI analysis report…",
+                message = stringResource(R.string.loc_retrieving_analysis),
                 modifier = Modifier.padding(padding)
             )
 
@@ -210,6 +223,7 @@ fun AnalysisResultScreen(
                 onToggleSkeletonOnOriginal = viewModel::toggleSkeletonOnOriginal,
                 currentPlaybackPositionMs = uiState.currentPlaybackPositionMs,
                 currentKeypointFrame = uiState.currentKeypointFrame,
+                activeRepNumber = uiState.activeRepNumber,
                 seekRequestMs = seekRequestMs,
                 onClearSeekRequest = viewModel::clearSeekRequest,
                 onSeekToTimestamp = viewModel::requestSeek,
@@ -235,6 +249,7 @@ private fun AnalysisReportContent(
     onToggleSkeletonOnOriginal: () -> Unit,
     currentPlaybackPositionMs: Long,
     currentKeypointFrame: KeypointFrameModel?,
+    activeRepNumber: Int?,
     seekRequestMs: Long?,
     onClearSeekRequest: () -> Unit,
     onSeekToTimestamp: (Long) -> Unit,
@@ -250,9 +265,20 @@ private fun AnalysisReportContent(
     ) {
         Spacer(modifier = Modifier.height(4.dp))
 
+        if (result.status.equals("FAILED", ignoreCase = true) ||
+            result.status.equals("NO_PERSON_DETECTED", ignoreCase = true) ||
+            result.status.equals("INSUFFICIENT_POSE_QUALITY", ignoreCase = true)
+        ) {
+            AnalysisStatusAlertCard(
+                status = result.status,
+                message = result.errorMessage ?: result.formFeedbackList.firstOrNull()
+                    ?: "Video analysis could not evaluate form reliably."
+            )
+        }
+
         // SECTION A – Dual Video Comparison Player (Original vs AI Skeleton)
         if (result.mediaType == "VIDEO" || !result.originalVideoUrl.isNullOrBlank() || !result.annotatedVideoUrl.isNullOrBlank()) {
-            SectionHeader(title = "Section A: Video Comparison")
+            SectionHeader(title = stringResource(R.string.loc_section_video_comparison))
             VideoComparisonPlayerSection(
                 result = result,
                 authToken = authToken,
@@ -269,13 +295,60 @@ private fun AnalysisReportContent(
         }
 
         // SECTION B – Performance & Form Score
-        SectionHeader(title = "Section B: Performance Score")
+        SectionHeader(title = stringResource(R.string.loc_section_performance_score))
         PerformanceSummarySection(result = result)
         SectionDivider()
 
+        // Repetition Summary Card
+        val showRepSummary = result.repCount > 0 || result.validReps > 0 ||
+            result.incompleteReps > 0 || result.reps.isNotEmpty() ||
+            result.exerciseCode?.uppercase() in setOf("SQUAT", "PUSH_UP", "PULL_UP")
+        if (showRepSummary) {
+            SectionHeader(title = "Repetition Summary")
+            RepetitionSummaryCard(result = result)
+            SectionDivider()
+        }
+
+        // Camera View Quality Card
+        result.cameraQuality?.let { quality ->
+            SectionHeader(title = "Camera View Quality")
+            CameraQualityCard(quality = quality)
+            SectionDivider()
+        }
+
+        // Rep-by-Rep Breakdown Section (tap rep -> seek video)
+        if (result.reps.isNotEmpty()) {
+            SectionHeader(title = "Rep-by-Rep Breakdown")
+            RepBreakdownSection(
+                reps = result.reps,
+                activeRepNumber = activeRepNumber,
+                onSeekToTimestamp = onSeekToTimestamp
+            )
+            SectionDivider()
+        }
+
+        // Movement Metrics Section (v1.0)
+        if (result.movementMetrics.isNotEmpty()) {
+            SectionHeader(title = "Movement Metrics")
+            MovementMetricsSection(metrics = result.movementMetrics)
+            SectionDivider()
+        }
+
+        // Issue Severity & Recommendations Section (v1.0)
+        if (result.issues.isNotEmpty() || result.recommendations.isNotEmpty()) {
+            SectionHeader(title = "Issues & Recommendations")
+            IssuesAndRecommendationsSection(
+                issues = result.issues,
+                recommendations = result.recommendations,
+                reps = result.reps,
+                onSeekToTimestamp = onSeekToTimestamp
+            )
+            SectionDivider()
+        }
+
         // SECTION C – Synchronized Keypoint Timeline
         if (result.keypointsData != null || currentKeypointFrame != null) {
-            SectionHeader(title = "Section C: Keypoint Timeline & Pose")
+            SectionHeader(title = stringResource(R.string.loc_section_keypoint_pose))
             KeypointTimelineSyncSection(
                 currentPosMs = currentPlaybackPositionMs,
                 currentFrame = currentKeypointFrame,
@@ -287,28 +360,28 @@ private fun AnalysisReportContent(
         }
 
         // SECTION D – AI Form Feedback
-        SectionHeader(title = "Section D: AI Form Feedback")
+        SectionHeader(title = stringResource(R.string.loc_section_ai_feedback))
         FeedbackSection(result = result)
         SectionDivider()
 
         // SECTION E – Biomechanical Analysis & Stability
-        SectionHeader(title = "Biomechanical Analysis")
+        SectionHeader(title = stringResource(R.string.loc_biomechanical_analysis))
         BiomechanicsSection(result = result)
         SectionDivider()
 
         if (result.timeline.isNotEmpty()) {
-            SectionHeader(title = "Stability Analysis")
+            SectionHeader(title = stringResource(R.string.loc_stability_analysis))
             StabilitySection(timeline = result.timeline, stability = result.stabilityMetrics)
             SectionDivider()
 
-            SectionHeader(title = "Frame-by-Frame Timeline")
+            SectionHeader(title = stringResource(R.string.loc_frame_by_frame_timeline))
             FrameTimelineSection(timeline = result.timeline)
             SectionDivider()
         }
 
         // Video Overview & Metadata
         if (result.videoMetadata != null) {
-            SectionHeader(title = "Video Metadata")
+            SectionHeader(title = stringResource(R.string.loc_video_metadata))
             VideoOverviewSection(result = result, metadata = result.videoMetadata)
             SectionDivider()
         }
@@ -338,7 +411,7 @@ private fun AnalysisReportContent(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Analyze Another Video",
+                    text = stringResource(R.string.loc_analyze_another_video),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = Accent
@@ -354,27 +427,9 @@ private fun AnalysisReportContent(
 // URL Resolver Helper
 // ─────────────────────────────────────────────────────────────────────────────
 
-private fun resolveMediaUrl(rawUrl: String?, token: String?): String? {
-    if (rawUrl.isNullOrBlank()) return null
-    val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
-    var absoluteUrl = if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
-        rawUrl
-    } else {
-        "$baseUrl/${rawUrl.trimStart('/')}"
-    }
+private fun resolveMediaUrl(rawUrl: String?, token: String?): String? =
+    com.calisthenics.ai.ui.media.MediaUrlUtils.resolveMediaUrl(rawUrl, token)
 
-    // Security & Playback Fix: Upgrade http to https if base URL is HTTPS or domain matches backend host.
-    // This prevents Android's NetworkSecurityConfig from throwing CleartextNotPermittedException.
-    if ((baseUrl.startsWith("https://") || absoluteUrl.contains("sky-enterprise.id.vn")) && absoluteUrl.startsWith("http://")) {
-        absoluteUrl = "https://" + absoluteUrl.substring("http://".length)
-    }
-
-    return if (!token.isNullOrBlank() && !absoluteUrl.contains("token=")) {
-        if (absoluteUrl.contains("?")) "$absoluteUrl&token=$token" else "$absoluteUrl?token=$token"
-    } else {
-        absoluteUrl
-    }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Section A: Dual Video Comparison Player
@@ -536,7 +591,7 @@ private fun VideoComparisonPlayerSection(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Original Video",
+                    text = stringResource(R.string.original_video),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = if (isOriginal) FontWeight.Bold else FontWeight.Medium,
                     color = if (isOriginal) Color.Black else SecondaryText
@@ -554,7 +609,7 @@ private fun VideoComparisonPlayerSection(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "AI Skeleton Video",
+                    text = stringResource(R.string.ai_skeleton_video),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = if (isAnnotated) FontWeight.Bold else FontWeight.Medium,
                     color = if (isAnnotated) Color.Black else SecondaryText
@@ -612,7 +667,7 @@ private fun VideoComparisonPlayerSection(
                     ) {
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Play",
+                            contentDescription = stringResource(R.string.play),
                             tint = Accent,
                             modifier = Modifier.size(32.dp)
                         )
@@ -635,7 +690,7 @@ private fun VideoComparisonPlayerSection(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Warning,
-                            contentDescription = "Playback Error",
+                            contentDescription = stringResource(R.string.playback_error),
                             tint = Color(0xFFFF5252),
                             modifier = Modifier.size(36.dp)
                         )
@@ -659,7 +714,7 @@ private fun VideoComparisonPlayerSection(
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("Retry Playback", color = Color.Black, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.retry_playback), color = Color.Black, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -746,7 +801,7 @@ private fun VideoComparisonPlayerSection(
                 ) {
                     Icon(
                         imageVector = if (showSkeletonOnOriginal) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        contentDescription = "Toggle Skeleton Overlay",
+                        contentDescription = stringResource(R.string.loc_toggle_skeleton_overlay),
                         tint = if (showSkeletonOnOriginal) Accent else MutedText
                     )
                 }
@@ -902,7 +957,7 @@ private fun ScoreHeroCard(score: Double) {
         ) {
             Column {
                 Text(
-                    text = "AI Video Assessment",
+                    text = stringResource(R.string.loc_ai_video_assessment),
                     style = MaterialTheme.typography.labelMedium,
                     color = SecondaryText
                 )
@@ -915,7 +970,7 @@ private fun ScoreHeroCard(score: Double) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Movement assessed via YOLOv8 Pose biomechanical scoring.",
+                    text = stringResource(R.string.loc_movement_scored),
                     style = MaterialTheme.typography.labelSmall,
                     color = MutedText
                 )
@@ -987,7 +1042,7 @@ private fun ComponentScoresCard(scores: ComponentScores) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Form Accuracy Breakdown",
+                text = stringResource(R.string.loc_form_accuracy_breakdown),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = PrimaryText
@@ -1132,7 +1187,7 @@ private fun KeypointTimelineSyncSection(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "17 COCO Keypoints Wireframe",
+                        text = stringResource(R.string.loc_coco_keypoints),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = SecondaryText
@@ -1163,7 +1218,7 @@ private fun KeypointTimelineSyncSection(
                         )
                     } else {
                         Text(
-                            text = "No keypoints detected for this timestamp",
+                            text = stringResource(R.string.loc_no_keypoints_timestamp),
                             style = MaterialTheme.typography.bodySmall,
                             color = MutedText
                         )
@@ -1274,7 +1329,7 @@ private fun KeypointJointChip(kp: KeypointItemModel) {
         }
         Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = "X: %.2f  Y: %.2f".format(kp.x, kp.y),
+            text = stringResource(R.string.loc_coordinate_format).format(kp.x, kp.y),
             style = MaterialTheme.typography.labelSmall,
             color = MutedText,
             fontSize = 10.sp
@@ -1354,7 +1409,7 @@ private fun FeedbackSection(result: AnalysisResult) {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "Alignment & Stability Checklist",
+                    text = stringResource(R.string.loc_alignment_stability_checklist),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = SecondaryText
@@ -1397,13 +1452,13 @@ private fun FeedbackSection(result: AnalysisResult) {
         }
 
         if (recommendations.isNotEmpty()) {
-            FeedbackGroup(title = "Identified Mistakes & Form Corrections", items = recommendations, icon = Icons.Default.Warning, iconColor = Warning)
+            FeedbackGroup(title = stringResource(R.string.identified_mistakes), items = recommendations, icon = Icons.Default.Warning, iconColor = Warning)
         }
         if (positives.isNotEmpty()) {
-            FeedbackGroup(title = "Form Strengths", items = positives, icon = Icons.Default.CheckCircle, iconColor = Success)
+            FeedbackGroup(title = stringResource(R.string.form_strengths), items = positives, icon = Icons.Default.CheckCircle, iconColor = Success)
         }
         if (general.isNotEmpty()) {
-            FeedbackGroup(title = "AI Suggestions & Coaching Cues", items = general, icon = Icons.Default.Info, iconColor = Info)
+            FeedbackGroup(title = stringResource(R.string.ai_suggestions), items = general, icon = Icons.Default.Info, iconColor = Info)
         }
     }
 }
@@ -1565,12 +1620,12 @@ private fun StabilitySection(timeline: List<FrameMetric>, stability: StabilityMe
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 StabilityChip(
-                    label = "Stability Score",
+                    label = stringResource(R.string.stability_score),
                     value = "${stability.stabilityScore.roundToInt()}%",
                     modifier = Modifier.weight(1f)
                 )
                 StabilityChip(
-                    label = "Pose Confidence",
+                    label = stringResource(R.string.pose_confidence),
                     value = "%.0f%%".format(stability.averagePoseConfidence * 100),
                     modifier = Modifier.weight(1f)
                 )
@@ -1626,7 +1681,7 @@ private fun FrameTimelineSection(timeline: List<FrameMetric>) {
                         .padding(horizontal = 8.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = "%.1fs".format(frame.timestampSec),
+                        text = stringResource(R.string.loc_duration_seconds_format).format(frame.timestampSec),
                         style = MaterialTheme.typography.labelSmall,
                         color = if (isSelected) color else SecondaryText
                     )
@@ -1834,4 +1889,630 @@ private fun formatSeconds(sec: Double): String {
 
 private fun formatTimestamp(raw: String): String {
     return raw.substringBefore("T").ifEmpty { raw }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Contract v1.0 Sections: Reps, Camera Quality, Movement Metrics & Issues
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun AnalysisStatusAlertCard(
+    status: String,
+    message: String
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Error.copy(alpha = 0.12f)),
+        border = BorderStroke(1.dp, Error.copy(alpha = 0.4f))
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = null,
+                tint = Error,
+                modifier = Modifier.size(22.dp)
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = status.replace("_", " "),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Error
+                )
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PrimaryText
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RepetitionSummaryCard(result: AnalysisResult) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        RepStatBox(
+            label = "Total Reps",
+            value = "${result.repCount}",
+            valueColor = PrimaryText,
+            modifier = Modifier.weight(1f)
+        )
+        RepStatBox(
+            label = "Valid Reps",
+            value = "${result.validReps}",
+            valueColor = Success,
+            modifier = Modifier.weight(1f)
+        )
+        RepStatBox(
+            label = "Incomplete",
+            value = "${result.incompleteReps}",
+            valueColor = if (result.incompleteReps > 0) Warning else PrimaryText,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun RepStatBox(
+    label: String,
+    value: String,
+    valueColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(Elevated)
+            .border(1.dp, SubtleBorder, RoundedCornerShape(14.dp))
+            .padding(vertical = 14.dp, horizontal = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.ExtraBold,
+            color = valueColor
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = SecondaryText,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun CameraQualityCard(quality: CameraQuality) {
+    val qualityColor = when (quality.overallQuality.uppercase()) {
+        "GOOD", "EXCELLENT", "HIGH" -> Success
+        "FAIR", "MODERATE", "ACCEPTABLE" -> Warning
+        "POOR", "LOW" -> Error
+        else -> SecondaryText
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Elevated),
+        border = BorderStroke(1.dp, SubtleBorder)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Videocam,
+                        contentDescription = null,
+                        tint = Accent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "View: ${quality.viewAngle.replace("_", " ")}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PrimaryText
+                    )
+                }
+                StatusPill(label = quality.overallQuality, color = qualityColor)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                MetaInfoChip(
+                    label = "Full-Body Visible",
+                    value = quality.fullBodyVisibleRatio?.let { "${(it * 100).roundToInt()}%" } ?: "—",
+                    modifier = Modifier.weight(1f)
+                )
+                MetaInfoChip(
+                    label = "Pose Confidence",
+                    value = quality.averageConfidence?.let { "${(it * 100).roundToInt()}%" } ?: "—",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            if (quality.warnings.isNotEmpty()) {
+                HorizontalDivider(color = SubtleBorder)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    quality.warnings.forEach { warning ->
+                        Row(
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Warning,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = warning,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Warning
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RepBreakdownSection(
+    reps: List<RepBreakdown>,
+    activeRepNumber: Int?,
+    onSeekToTimestamp: (Long) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            text = "Tap any repetition to jump the video player to its start timestamp",
+            style = MaterialTheme.typography.labelSmall,
+            color = MutedText
+        )
+
+        reps.forEach { rep ->
+            val isActive = activeRepNumber == rep.repNumber
+            val statusColor = if (rep.valid) Success else Warning
+            val borderColor = if (isActive) Accent else SubtleBorder
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSeekToTimestamp(rep.startTimestampMs) },
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isActive) Accent.copy(alpha = 0.08f) else Elevated
+                ),
+                border = BorderStroke(if (isActive) 1.5.dp else 1.dp, borderColor)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Rep #${rep.repNumber}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = PrimaryText
+                            )
+                            StatusPill(
+                                label = if (rep.valid) "VALID" else "INCOMPLETE",
+                                color = statusColor
+                            )
+                            rep.depthClassification?.takeIf { it.isNotBlank() }?.let { depth ->
+                                StatusPill(label = depth.uppercase(), color = Info)
+                            }
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "@ ${formatDurationMs(rep.startTimestampMs)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Accent,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            rep.formScore?.let { score ->
+                                val scoreColor = when {
+                                    score >= 80 -> Success
+                                    score >= 60 -> Warning
+                                    else -> Error
+                                }
+                                Text(
+                                    text = "${score.roundToInt()}%",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = scoreColor
+                                )
+                            }
+                        }
+                    }
+
+                    val statsLine = listOfNotNull(
+                        rep.durationMs?.let { "Duration: ${"%.2f".format(it / 1000.0)}s" },
+                        rep.minAngleDeg?.let { "Min Angle: ${"%.1f°".format(it)}" },
+                        rep.romDeg?.let { "ROM: ${"%.1f°".format(it)}" }
+                    ).joinToString("  •  ")
+
+                    if (statsLine.isNotBlank()) {
+                        Text(
+                            text = statsLine,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SecondaryText
+                        )
+                    }
+
+                    if (!rep.feedback.isNullOrBlank()) {
+                        Text(
+                            text = rep.feedback,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = PrimaryText
+                        )
+                    }
+
+                    if (rep.issues.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            rep.issues.forEach { issue ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = Warning,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = issue,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Warning
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MovementMetricsSection(metrics: Map<String, MovementMetric>) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        metrics.values.forEach { metric ->
+            MovementMetricCard(metric = metric)
+        }
+    }
+}
+
+@Composable
+private fun MovementMetricCard(metric: MovementMetric) {
+    val isUnavailable = metric.isUnavailable
+    val statusUpper = metric.status.uppercase()
+    val statusColor = when {
+        isUnavailable -> SecondaryText
+        statusUpper in setOf("GOOD", "PASS", "VALID", "OPTIMAL", "EXCELLENT") -> Success
+        statusUpper in setOf("NEEDS_IMPROVEMENT", "MODERATE", "WARNING", "LOW_CONFIDENCE") -> Warning
+        else -> Error
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Elevated),
+        border = BorderStroke(1.dp, SubtleBorder)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = metric.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PrimaryText,
+                    modifier = Modifier.weight(1f)
+                )
+                StatusPill(label = statusUpper, color = statusColor)
+            }
+
+            if (isUnavailable) {
+                Text(
+                    text = "Unavailable — Landmarks occluded or out of frame",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SecondaryText
+                )
+                if (!metric.unavailableReason.isNullOrBlank()) {
+                    Text(
+                        text = metric.unavailableReason,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MutedText
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val valueStr = metric.value?.let { v ->
+                        val formatted = if (v % 1.0 == 0.0) "${v.toInt()}" else "%.1f".format(v)
+                        if (metric.unit.isNotBlank()) "$formatted${metric.unit}" else formatted
+                    } ?: "—"
+
+                    Text(
+                        text = valueStr,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Accent
+                    )
+
+                    metric.targetRange?.takeIf { it.isNotBlank() }?.let { target ->
+                        Text(
+                            text = "Target: $target",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = SecondaryText
+                        )
+                    }
+                }
+
+                metric.score?.let { score ->
+                    val fraction = (score / 100.0).toFloat().coerceIn(0f, 1f)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        LinearProgressIndicator(
+                            progress = { fraction },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = statusColor,
+                            trackColor = SubtleBorder
+                        )
+                        Text(
+                            text = "${score.roundToInt()}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = statusColor
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun IssuesAndRecommendationsSection(
+    issues: List<StructuredIssue>,
+    recommendations: List<String>,
+    reps: List<RepBreakdown>,
+    onSeekToTimestamp: (Long) -> Unit
+) {
+    val sortedIssues = remember(issues) {
+        issues.sortedBy {
+            when (it.severity) {
+                IssueSeverity.HIGH -> 0
+                IssueSeverity.MEDIUM -> 1
+                IssueSeverity.LOW -> 2
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        if (sortedIssues.isNotEmpty()) {
+            sortedIssues.forEach { issue ->
+                StructuredIssueCard(
+                    issue = issue,
+                    reps = reps,
+                    onSeekToTimestamp = onSeekToTimestamp
+                )
+            }
+        }
+
+        if (recommendations.isNotEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Elevated),
+                border = BorderStroke(1.dp, Accent.copy(alpha = 0.28f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lightbulb,
+                            contentDescription = null,
+                            tint = Accent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Actionable Recommendations",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = PrimaryText
+                        )
+                    }
+                    HorizontalDivider(color = SubtleBorder)
+                    recommendations.forEach { rec ->
+                        Row(
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 6.dp)
+                                    .size(5.dp)
+                                    .clip(CircleShape)
+                                    .background(Accent)
+                            )
+                            Text(
+                                text = rec,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = PrimaryText
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StructuredIssueCard(
+    issue: StructuredIssue,
+    reps: List<RepBreakdown>,
+    onSeekToTimestamp: (Long) -> Unit
+) {
+    val severityColor = when (issue.severity) {
+        IssueSeverity.HIGH -> Color(0xFFE53935)
+        IssueSeverity.MEDIUM -> Color(0xFFFFA000)
+        IssueSeverity.LOW -> Color(0xFF42A5F5)
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Elevated),
+        border = BorderStroke(1.dp, severityColor.copy(alpha = 0.35f))
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = issue.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = PrimaryText,
+                    modifier = Modifier.weight(1f)
+                )
+                StatusPill(label = issue.severity.name, color = severityColor)
+            }
+
+            if (issue.message.isNotBlank() && issue.message != issue.title) {
+                Text(
+                    text = issue.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SecondaryText
+                )
+            }
+
+            if (issue.affectedReps.isNotEmpty()) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    item {
+                        Text(
+                            text = "Affected reps:",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MutedText
+                        )
+                    }
+                    items(issue.affectedReps) { repNum ->
+                        val matchingRep = reps.firstOrNull { it.repNumber == repNum }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = severityColor.copy(alpha = 0.14f),
+                            modifier = Modifier.clickable(enabled = matchingRep != null) {
+                                matchingRep?.let { onSeekToTimestamp(it.startTimestampMs) }
+                            }
+                        ) {
+                            Text(
+                                text = "#$repNum",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = severityColor,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (!issue.recommendation.isNullOrBlank()) {
+                Text(
+                    text = "Fix: ${issue.recommendation}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Accent
+                )
+            }
+        }
+    }
 }

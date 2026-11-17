@@ -1,5 +1,9 @@
 package com.calisthenics.ai.ui.profile
 
+import com.calisthenics.ai.R
+
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -103,7 +107,7 @@ fun SwitchAccountScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Chuyển đổi tài khoản",
+                        stringResource(R.string.loc_switch_account_vietnamese),
                         fontWeight = FontWeight.Bold,
                         color = PrimaryText
                     )
@@ -112,7 +116,7 @@ fun SwitchAccountScreen(
                     IconButton(onClick = onBackClick) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Quay lại",
+                            contentDescription = stringResource(R.string.common_back),
                             tint = PrimaryText
                         )
                     }
@@ -134,13 +138,13 @@ fun SwitchAccountScreen(
         ) {
             Spacer(Modifier.height(8.dp))
             Text(
-                "Các tài khoản đã đăng nhập trên thiết bị này",
+                stringResource(R.string.loc_saved_accounts),
                 style = MaterialTheme.typography.titleSmall,
                 color = PrimaryText,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                "Chọn một tài khoản để chuyển đổi nhanh hoặc đăng nhập thêm tài khoản mới.",
+                stringResource(R.string.loc_switch_account_description_vietnamese),
                 style = MaterialTheme.typography.bodySmall,
                 color = SecondaryText
             )
@@ -181,7 +185,7 @@ fun SwitchAccountScreen(
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            "Thêm tài khoản mới",
+                            stringResource(R.string.loc_add_account_vietnamese),
                             fontWeight = FontWeight.SemiBold,
                             color = Accent
                         )
@@ -207,19 +211,19 @@ fun SwitchAccountScreen(
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Text(
-                        "Xóa tài khoản khỏi thiết bị?",
+                        stringResource(R.string.loc_delete_account_question),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryText
                     )
                     Text(
-                        "Bạn có chắc chắn muốn xóa tài khoản ${account.email} khỏi thiết bị này? Bạn sẽ cần đăng nhập lại nếu muốn sử dụng tiếp.",
+                        stringResource(R.string.loc_delete_account_message_vietnamese, account.email),
                         style = MaterialTheme.typography.bodyMedium,
                         color = SecondaryText
                     )
                     if (account.isActive) {
                         Text(
-                            "Lưu ý: Đây là tài khoản đang hoạt động. Việc xóa tài khoản này sẽ đăng xuất phiên hiện tại.",
+                            stringResource(R.string.loc_active_account_warning_vietnamese),
                             style = MaterialTheme.typography.bodySmall,
                             color = Error,
                             fontWeight = FontWeight.Medium
@@ -233,7 +237,7 @@ fun SwitchAccountScreen(
                             onClick = { viewModel.cancelRemoveAccount() },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Hủy")
+                            Text(stringResource(R.string.cancel))
                         }
                         Button(
                             onClick = { viewModel.confirmRemoveAccount() },
@@ -243,7 +247,7 @@ fun SwitchAccountScreen(
                                 contentColor = PrimaryText
                             )
                         ) {
-                            Text("Xóa")
+                            Text(stringResource(R.string.common_delete))
                         }
                     }
                 }
@@ -337,7 +341,7 @@ private fun AccountCard(
                         ) {
                             Icon(
                                 Icons.Default.Check,
-                                contentDescription = "Active",
+                                contentDescription = stringResource(R.string.loc_active),
                                 tint = Accent,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -353,7 +357,7 @@ private fun AccountCard(
                         ) {
                             Icon(
                                 Icons.Default.DeleteOutline,
-                                contentDescription = "Xóa tài khoản khỏi máy",
+                                contentDescription = stringResource(R.string.loc_delete_account_device),
                                 tint = SecondaryText.copy(alpha = 0.7f),
                                 modifier = Modifier.size(20.dp)
                             )

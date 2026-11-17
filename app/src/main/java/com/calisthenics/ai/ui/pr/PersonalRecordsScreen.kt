@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.pr
 
+import com.calisthenics.ai.R
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -68,7 +71,7 @@ fun PersonalRecordsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Personal Records",
+                        stringResource(R.string.personal_records),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryText
@@ -76,12 +79,12 @@ fun PersonalRecordsScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PrimaryText)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back), tint = PrimaryText)
                     }
                 },
                 actions = {
                     IconButton(onClick = { viewModel.loadData() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = PrimaryText)
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.common_refresh), tint = PrimaryText)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)
@@ -93,7 +96,7 @@ fun PersonalRecordsScreen(
                 containerColor = Accent,
                 contentColor = Ink
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add PR")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_pr))
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -108,9 +111,9 @@ fun PersonalRecordsScreen(
             state.prs.isEmpty() && !state.isLoading -> {
                 Box(Modifier.fillMaxSize().padding(padding)) {
                     EmptyState(
-                        title = "No Personal Records Yet",
-                        body = "Log your best calisthenics feats, weighted records, and isometric holds.",
-                        action = "Add Personal Record",
+                        title = stringResource(R.string.no_personal_records),
+                        body = stringResource(R.string.loc_log_pr_description),
+                        action = stringResource(R.string.loc_add_personal_record),
                         onAction = { viewModel.openAddPrForm() }
                     )
                 }
@@ -133,7 +136,7 @@ fun PersonalRecordsScreen(
                         ) {
                             val filterOptions = listOf("ALL") + PR_TYPES.map { it.first }
                             filterOptions.forEach { filter ->
-                                val label = if (filter == "ALL") "All PRs" else filter.replace("MAX_", "").replace('_', ' ')
+                                val label = if (filter == "ALL") stringResource(R.string.loc_all_prs) else filter.replace("MAX_", "").replace('_', ' ')
                                 FilterChip(
                                     selected = state.selectedPrTypeFilter.equals(filter, ignoreCase = true),
                                     onClick = { viewModel.selectPrTypeFilter(filter) },
@@ -150,8 +153,8 @@ fun PersonalRecordsScreen(
                                 dataPoints = state.chartDataPoints,
                                 selectedFilter = state.chartFilter,
                                 onFilterSelected = { viewModel.setChartFilter(it) },
-                                unit = state.chartHistory.firstOrNull()?.unit ?: "units",
-                                title = "${state.selectedChartExerciseName ?: "Exercise"} Progression"
+                                unit = state.chartHistory.firstOrNull()?.unit ?: stringResource(R.string.loc_units),
+                                title = stringResource(R.string.loc_progression_title, state.selectedChartExerciseName ?: stringResource(R.string.exercise))
                             )
                         }
                     }
@@ -176,7 +179,7 @@ fun PersonalRecordsScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    PillBadge("${records.size} PRs", isAccent = true)
+                                    PillBadge(stringResource(R.string.loc_prs_count, records.size), isAccent = true)
                                     IconButton(
                                         onClick = {
                                             viewModel.selectChartExercise(
@@ -188,7 +191,7 @@ fun PersonalRecordsScreen(
                                     ) {
                                         Icon(
                                             Icons.Default.ShowChart,
-                                            contentDescription = "View Chart",
+                                            contentDescription = stringResource(R.string.view_chart),
                                             tint = if (state.selectedChartExerciseName == exerciseName) Accent else SecondaryText
                                         )
                                     }
@@ -201,7 +204,7 @@ fun PersonalRecordsScreen(
                                 pr = pr,
                                 onEdit = { viewModel.openEditPrForm(pr) },
                                 onDelete = { viewModel.promptDelete(pr) },
-                                onShare = { viewModel.shareWithCoach(pr.id) }
+                                onShare = { viewModel.openShareSheet(pr) }
                             )
                         }
                     }
@@ -231,10 +234,10 @@ fun PersonalRecordsScreen(
     state.deletingPr?.let { pr ->
         AlertDialog(
             onDismissRequest = { viewModel.cancelDelete() },
-            title = { Text("Delete Personal Record", color = PrimaryText) },
+            title = { Text(stringResource(R.string.delete_personal_record), color = PrimaryText) },
             text = {
                 Text(
-                    "Are you sure you want to delete this PR (${pr.displayFormattedValue} for ${pr.exerciseName})? This cannot be undone.",
+                    stringResource(R.string.loc_delete_pr_message, pr.displayFormattedValue, pr.exerciseName),
                     color = SecondaryText
                 )
             },
@@ -243,15 +246,37 @@ fun PersonalRecordsScreen(
                     onClick = { viewModel.confirmDelete() },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Delete")
+                    Text(stringResource(R.string.common_delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.cancelDelete() }) {
-                    Text("Cancel", color = SecondaryText)
+                    Text(stringResource(R.string.cancel), color = SecondaryText)
                 }
             },
             containerColor = Elevated
+        )
+    }
+
+    // Share PR Recipient Modal Bottom Sheet
+    state.sharingPr?.let { prToShare ->
+        val alreadySharedIds = remember(state.sharedPrs, prToShare.id) {
+            state.sharedPrs
+                .filter { it.personalRecord.id == prToShare.id }
+                .map { it.coachUserId }
+                .toSet()
+        }
+        SharePrBottomSheet(
+            pr = prToShare,
+            recipients = state.shareRecipients,
+            alreadySharedRecipientIds = alreadySharedIds,
+            isLoadingRecipients = state.isLoadingRecipients,
+            isSharing = state.isSharingPr,
+            errorMessage = state.shareError,
+            onDismiss = { viewModel.dismissShareSheet() },
+            onConfirmShare = { recipientId ->
+                viewModel.shareWithCoach(prToShare.id, recipientId)
+            }
         )
     }
 }
@@ -319,12 +344,12 @@ private fun PrCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Achieved: ${pr.achievedAt.take(10)}",
+                    stringResource(R.string.loc_achieved_date, pr.achievedAt.take(10)),
                     fontSize = 12.sp,
                     color = SecondaryText
                 )
                 if (pr.workoutSessionId != null) {
-                    Text("from workout session", fontSize = 11.sp, color = SecondaryText)
+                    Text(stringResource(R.string.from_workout_session), fontSize = 11.sp, color = SecondaryText)
                 }
             }
 
@@ -348,19 +373,19 @@ private fun PrCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = onShare) {
-                    Icon(Icons.Default.Share, contentDescription = "Share", modifier = Modifier.size(16.dp), tint = SecondaryText)
+                    Icon(Icons.Default.Share, contentDescription = stringResource(R.string.common_share), modifier = Modifier.size(16.dp), tint = SecondaryText)
                     Spacer(Modifier.width(4.dp))
-                    Text("Share", fontSize = 12.sp, color = SecondaryText)
+                    Text(stringResource(R.string.common_share), fontSize = 12.sp, color = SecondaryText)
                 }
                 TextButton(onClick = onEdit) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(16.dp), tint = SecondaryText)
+                    Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.common_edit), modifier = Modifier.size(16.dp), tint = SecondaryText)
                     Spacer(Modifier.width(4.dp))
-                    Text("Edit", fontSize = 12.sp, color = SecondaryText)
+                    Text(stringResource(R.string.common_edit), fontSize = 12.sp, color = SecondaryText)
                 }
                 TextButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.common_delete), modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.width(4.dp))
-                    Text("Delete", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.common_delete), fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -409,7 +434,7 @@ private fun PrFormDialog(
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Text(
-                    text = if (editingPr != null) "Edit Personal Record" else "New Personal Record",
+                    text = if (editingPr != null) stringResource(R.string.loc_edit_personal_record) else stringResource(R.string.loc_new_personal_record),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = PrimaryText
@@ -417,7 +442,7 @@ private fun PrFormDialog(
 
                 // Exercise selection / entry
                 Column {
-                    Text("Exercise", fontSize = 12.sp, color = SecondaryText, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.exercise), fontSize = 12.sp, color = SecondaryText, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(4.dp))
                     ExposedDropdownMenuBox(
                         expanded = exerciseDropdownExpanded,
@@ -432,7 +457,7 @@ private fun PrFormDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .menuAnchor(),
-                            placeholder = { Text("Choose or type exercise name", color = SecondaryText) },
+                            placeholder = { Text(stringResource(R.string.choose_or_type_exercise), color = SecondaryText) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = exerciseDropdownExpanded) },
                             singleLine = true
                         )
@@ -458,7 +483,7 @@ private fun PrFormDialog(
 
                 // PR Type selection
                 Column {
-                    Text("PR Type", fontSize = 12.sp, color = SecondaryText, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.pr_type), fontSize = 12.sp, color = SecondaryText, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(4.dp))
                     Row(
                         modifier = Modifier
@@ -488,8 +513,8 @@ private fun PrFormDialog(
                     OutlinedTextField(
                         value = valueInput,
                         onValueChange = { valueInput = it },
-                        label = { Text("Value") },
-                        placeholder = { Text("e.g. 40") },
+                        label = { Text(stringResource(R.string.value)) },
+                        placeholder = { Text(stringResource(R.string.loc_example_40)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1.5f),
                         singleLine = true
@@ -497,7 +522,7 @@ private fun PrFormDialog(
                     OutlinedTextField(
                         value = unitInput,
                         onValueChange = { unitInput = it },
-                        label = { Text("Unit") },
+                        label = { Text(stringResource(R.string.unit)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
@@ -507,7 +532,7 @@ private fun PrFormDialog(
                 OutlinedTextField(
                     value = dateInput,
                     onValueChange = { dateInput = it },
-                    label = { Text("Achieved Date (YYYY-MM-DD)") },
+                    label = { Text(stringResource(R.string.achieved_date)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -516,8 +541,8 @@ private fun PrFormDialog(
                 OutlinedTextField(
                     value = notesInput,
                     onValueChange = { notesInput = it },
-                    label = { Text("Notes (optional)") },
-                    placeholder = { Text("e.g. Strict form, +40kg dumbbell") },
+                    label = { Text(stringResource(R.string.notes_optional)) },
+                    placeholder = { Text(stringResource(R.string.loc_example_pr_notes)) },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3
                 )
@@ -529,7 +554,7 @@ private fun PrFormDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss, enabled = !isSaving) {
-                        Text("Cancel", color = SecondaryText)
+                        Text(stringResource(R.string.cancel), color = SecondaryText)
                     }
                     Spacer(Modifier.width(8.dp))
                     Button(
@@ -552,7 +577,7 @@ private fun PrFormDialog(
                         if (isSaving) {
                             CircularProgressIndicator(Modifier.size(18.dp), color = Ink, strokeWidth = 2.dp)
                         } else {
-                            Text(if (editingPr != null) "Update PR" else "Save PR")
+                            Text(if (editingPr != null) stringResource(R.string.loc_update_pr) else stringResource(R.string.loc_save_pr))
                         }
                     }
                 }

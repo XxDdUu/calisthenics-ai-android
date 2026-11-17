@@ -65,8 +65,15 @@ data class UpdatePrRequestDto(
     val notes: String? = null
 )
 
+data class SharePrRequestDto(
+    val recipientId: Long? = null,
+    val clientMessageId: String? = null
+)
+
 data class BatchSharePrRequestDto(
-    val prIds: List<Long>
+    val prIds: List<Long>,
+    val recipientId: Long? = null,
+    val clientMessageId: String? = null
 )
 
 data class SharedPersonalRecordDto(
@@ -75,6 +82,7 @@ data class SharedPersonalRecordDto(
     @SerializedName("clientUserId", alternate = ["clientId"])
     val clientUserId: Long = 0L,
     val clientName: String = "",
+    val clientAvatarUrl: String? = null,
     @SerializedName("coachUserId", alternate = ["coachId"])
     val coachUserId: Long = 0L,
     val coachName: String = "",
@@ -85,7 +93,9 @@ data class SharedPersonalRecordDto(
     @SerializedName("isRead", alternate = ["read"])
     val isRead: Boolean = false,
     val readAt: String? = null,
-    val status: String = "SHARED"
+    val status: String = "SHARED",
+    val conversationId: Long? = null,
+    val chatMessageId: Long? = null
 )
 
 data class CoachFeedbackRequestDto(
@@ -99,16 +109,29 @@ data class CoachFeedbackRequestDto(
 data class NotificationDto(
     val id: Long = 0L,
     val recipientId: Long? = null,
+    val recipientUserId: Long? = null,
     val senderId: Long? = null,
     val senderName: String? = null,
     val senderAvatarUrl: String? = null,
+    val type: String? = null,
     val notificationType: String = "",
     val referenceId: Long? = null,
+    val relatedEntityType: String? = null,
+    val relatedEntityId: Long? = null,
+    val deepLink: String? = null,
     val title: String = "",
     val message: String = "",
+    @com.google.gson.annotations.SerializedName(value = "isRead", alternate = ["read"])
     val isRead: Boolean = false,
-    val createdAt: String = ""
-)
+    val createdAt: String = "",
+    val readAt: String? = null
+) {
+    val resolvedType: String
+        get() = type?.takeIf { it.isNotBlank() } ?: notificationType
+
+    val resolvedEntityId: Long?
+        get() = relatedEntityId ?: referenceId
+}
 
 data class ProgressChartDataPointDto(
     val date: String = "",

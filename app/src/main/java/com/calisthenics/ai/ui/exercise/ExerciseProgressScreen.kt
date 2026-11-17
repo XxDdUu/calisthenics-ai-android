@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.exercise
 
+import com.calisthenics.ai.R
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,7 +46,7 @@ fun ExerciseProgressScreen(
             TopAppBar(
                 title = {
                     Text(
-                        state.progress?.exerciseName ?: "Exercise Progress",
+                        state.progress?.exerciseName ?: stringResource(R.string.loc_exercise_progress),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryText
@@ -51,7 +54,7 @@ fun ExerciseProgressScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PrimaryText)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back), tint = PrimaryText)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)
@@ -67,9 +70,9 @@ fun ExerciseProgressScreen(
             }
             state.error != null && state.progress == null -> {
                 EmptyState(
-                    title = "Data Unavailable",
-                    body = state.error ?: "Could not load exercise progress.",
-                    action = "Retry",
+                    title = stringResource(R.string.data_unavailable),
+                    body = state.error ?: stringResource(R.string.loc_could_not_load_exercise_progress),
+                    action = stringResource(R.string.common_retry),
                     onAction = { viewModel.load() }
                 )
             }
@@ -89,10 +92,10 @@ fun ExerciseProgressScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            PillBadge(progress.exerciseCategory.ifEmpty { "General" }, isAccent = true)
+                            PillBadge(progress.exerciseCategory.ifEmpty { stringResource(R.string.loc_general) }, isAccent = true)
                             progress.lastPerformedDate?.let {
                                 Text(
-                                    "Last session: $it",
+                                    stringResource(R.string.loc_last_session_date, it),
                                     fontSize = 12.sp,
                                     color = SecondaryText
                                 )
@@ -107,17 +110,17 @@ fun ExerciseProgressScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             StatCard(
-                                label = "Workouts",
+                                label = stringResource(R.string.workouts),
                                 value = progress.totalSessionsCompleted.toString(),
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
-                                label = "Total Sets",
+                                label = stringResource(R.string.loc_total_sets),
                                 value = progress.totalSetsCompleted.toString(),
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
-                                label = "Total Reps",
+                                label = stringResource(R.string.loc_total_reps),
                                 value = progress.totalRepsCompleted.toString(),
                                 modifier = Modifier.weight(1f)
                             )
@@ -129,11 +132,11 @@ fun ExerciseProgressScreen(
                         DarkCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Icon(Icons.Default.EmojiEvents, contentDescription = "PR", tint = Accent, modifier = Modifier.size(18.dp))
-                                    Text("Personal Best", fontWeight = FontWeight.Bold, color = PrimaryText, style = MaterialTheme.typography.bodyMedium)
+                                    Icon(Icons.Default.EmojiEvents, contentDescription = stringResource(R.string.loc_pr_short), tint = Accent, modifier = Modifier.size(18.dp))
+                                    Text(stringResource(R.string.personal_best), fontWeight = FontWeight.Bold, color = PrimaryText, style = MaterialTheme.typography.bodyMedium)
                                 }
                                 Text(
-                                    progress.bestSetSummary ?: "No sets recorded yet",
+                                    progress.bestSetSummary ?: stringResource(R.string.loc_no_sets_recorded_yet),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = Accent
@@ -157,7 +160,7 @@ fun ExerciseProgressScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            "Progressive Overload",
+                                            stringResource(R.string.loc_progressive_overload),
                                             fontWeight = FontWeight.Bold,
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = PrimaryText
@@ -192,7 +195,7 @@ fun ExerciseProgressScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Column {
-                                            Text("Previous Session", fontSize = 11.sp, color = SecondaryText)
+                                            Text(stringResource(R.string.previous_session), fontSize = 11.sp, color = SecondaryText)
                                             Text(
                                                 "${comp.previousValue} ${comp.metricName}",
                                                 style = MaterialTheme.typography.bodyMedium,
@@ -201,7 +204,7 @@ fun ExerciseProgressScreen(
                                             )
                                         }
                                         Column(horizontalAlignment = Alignment.End) {
-                                            Text("Latest Session", fontSize = 11.sp, color = SecondaryText)
+                                            Text(stringResource(R.string.latest_session), fontSize = 11.sp, color = SecondaryText)
                                             Text(
                                                 "${comp.currentValue} ${comp.metricName}",
                                                 style = MaterialTheme.typography.bodyMedium,
@@ -257,7 +260,7 @@ fun ExerciseProgressScreen(
                             selectedFilter = state.selectedFilter,
                             onFilterSelected = viewModel::onFilterSelected,
                             unit = state.selectedMetric.unit,
-                            title = "${state.selectedMetric.label} Progression"
+                            title = stringResource(R.string.loc_progression_title, state.selectedMetric.label)
                         )
                     }
 
@@ -265,7 +268,7 @@ fun ExerciseProgressScreen(
                     item {
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "Session History (${progress.history.size})",
+                            stringResource(R.string.loc_session_history_count, progress.history.size),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = PrimaryText
@@ -277,7 +280,7 @@ fun ExerciseProgressScreen(
                         item {
                             DarkCard(Modifier.fillMaxWidth()) {
                                 Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
-                                    Text("No sessions recorded for this exercise yet.", color = SecondaryText)
+                                    Text(stringResource(R.string.no_sessions_recorded), color = SecondaryText)
                                 }
                             }
                         }
@@ -335,7 +338,7 @@ fun ExerciseProgressScreen(
 
                                     if (session.totalVolume > 0) {
                                         Text(
-                                            "Volume: ${session.totalVolume.toInt()} kg",
+                                            stringResource(R.string.loc_volume_kg, session.totalVolume.toInt()),
                                             fontSize = 11.sp,
                                             color = SecondaryText
                                         )

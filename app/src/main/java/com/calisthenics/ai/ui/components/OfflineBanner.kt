@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.components
 
+import com.calisthenics.ai.R
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -20,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,7 +51,7 @@ fun OfflineBanner(
         ) {
             Icon(
                 imageVector = Icons.Default.CloudOff,
-                contentDescription = "Offline indicator",
+                contentDescription = stringResource(R.string.offline_indicator),
                 tint = Color.White,
                 modifier = Modifier
                     .size(16.dp)

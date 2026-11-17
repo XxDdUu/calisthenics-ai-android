@@ -5,14 +5,15 @@ import androidx.room.Index
 
 @Entity(
     tableName = "cached_workout_plan_exercises",
-    primaryKeys = ["planId", "dayId", "id"],
+    primaryKeys = ["ownerUserId", "planId", "dayId", "id"],
     indices = [
-        Index(value = ["planId"]),
-        Index(value = ["dayId"]),
-        Index(value = ["planId", "dayId"])
+        Index(value = ["ownerUserId", "planId"]),
+        Index(value = ["ownerUserId", "dayId"]),
+        Index(value = ["ownerUserId", "planId", "dayId"])
     ]
 )
 data class CachedWorkoutPlanExerciseEntity(
+    val ownerUserId: Long,
     val id: Long,
     val planId: Long,
     val dayId: Long,
@@ -29,4 +30,3 @@ data class CachedWorkoutPlanExerciseEntity(
     val displayOrder: Int,
     val notes: String?
 )
-

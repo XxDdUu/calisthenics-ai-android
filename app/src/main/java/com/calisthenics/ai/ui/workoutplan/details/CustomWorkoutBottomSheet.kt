@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.workoutplan.details
 
+import com.calisthenics.ai.R
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +34,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -112,9 +115,9 @@ fun CustomWorkoutBottomSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Rest Day", style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.rest_day_lower), style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "No workout is scheduled on the selected day(s).",
+                                stringResource(R.string.loc_no_workout_selected_day),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -127,8 +130,8 @@ fun CustomWorkoutBottomSheet(
                             value = editor.name,
                             onValueChange = onNameChange,
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Workout name") },
-                            placeholder = { Text("e.g. Planche + Push") },
+                            label = { Text(stringResource(R.string.loc_workout_name)) },
+                            placeholder = { Text(stringResource(R.string.loc_example_planche_push)) },
                             singleLine = true,
                             isError = editor.validationError == "Workout name is required.",
                             keyboardOptions = KeyboardOptions(
@@ -138,7 +141,7 @@ fun CustomWorkoutBottomSheet(
                         )
 
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Workout type (optional)", style = MaterialTheme.typography.titleSmall)
+                            Text(stringResource(R.string.loc_workout_type_optional), style = MaterialTheme.typography.titleSmall)
                             selectableWorkoutTypes.chunked(3).forEach { rowTypes ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -163,9 +166,9 @@ fun CustomWorkoutBottomSheet(
                             value = editor.trainingFocus,
                             onValueChange = onTrainingFocusChange,
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Training focus (optional)") },
+                            label = { Text(stringResource(R.string.loc_training_focus_optional)) },
                             placeholder = {
-                                Text("Describe your training focus...")
+                                Text(stringResource(R.string.loc_describe_training_focus))
                             },
                             minLines = 3,
                             maxLines = 5,
@@ -180,7 +183,7 @@ fun CustomWorkoutBottomSheet(
                     }
 
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Assign to day(s)", style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.loc_assign_to_days), style = MaterialTheme.typography.titleSmall)
                         WorkoutDayOfWeek.entries.chunked(4).forEach { rowDays ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -200,7 +203,7 @@ fun CustomWorkoutBottomSheet(
                             }
                         }
                         Text(
-                            "Days that already have a workout must be edited before they can be reassigned.",
+                            stringResource(R.string.loc_days_reassign_warning),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -223,7 +226,7 @@ fun CustomWorkoutBottomSheet(
                     enabled = !editor.isSaving,
                     modifier = Modifier.align(Alignment.Start)
                 ) {
-                    Text("Remove workout", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.loc_remove_workout), color = MaterialTheme.colorScheme.error)
                 }
             }
             Row(
@@ -238,7 +241,7 @@ fun CustomWorkoutBottomSheet(
                     enabled = !editor.isSaving,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
                 Button(
                     onClick = {
@@ -255,7 +258,7 @@ fun CustomWorkoutBottomSheet(
                             color = MaterialTheme.colorScheme.onPrimary
                         )
                     } else {
-                        Text("Save Workout")
+                        Text(stringResource(R.string.save_workout))
                     }
                 }
             }
@@ -265,15 +268,15 @@ fun CustomWorkoutBottomSheet(
     if (isConfirmingDelete) {
         AlertDialog(
             onDismissRequest = onCancelDelete,
-            title = { Text("Remove this workout?") },
-            text = { Text("The workout assignment will be removed from its selected day(s).") },
+            title = { Text(stringResource(R.string.loc_remove_this_workout)) },
+            text = { Text(stringResource(R.string.loc_remove_assignment_warning)) },
             confirmButton = {
                 TextButton(onClick = onConfirmDelete) {
-                    Text("Remove", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.common_remove), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = onCancelDelete) { Text("Cancel") }
+                TextButton(onClick = onCancelDelete) { Text(stringResource(R.string.cancel)) }
             }
         )
     }

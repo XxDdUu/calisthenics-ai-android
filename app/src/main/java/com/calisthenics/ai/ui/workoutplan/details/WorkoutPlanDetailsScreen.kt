@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.workoutplan.details
 
+import com.calisthenics.ai.R
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -67,6 +69,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -109,7 +112,7 @@ fun WorkoutPlanDetailsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = uiState.plan?.name ?: "Plan Details",
+                        text = uiState.plan?.name ?: stringResource(R.string.loc_plan_details_title),
                         style = androidx.compose.material3.MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             color = PrimaryText
@@ -122,7 +125,7 @@ fun WorkoutPlanDetailsScreen(
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.common_back),
                             tint = PrimaryText
                         )
                     }
@@ -134,7 +137,7 @@ fun WorkoutPlanDetailsScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
-                            contentDescription = "Rename Plan",
+                            contentDescription = stringResource(R.string.loc_rename_plan),
                             tint = Accent
                         )
                     }
@@ -154,11 +157,11 @@ fun WorkoutPlanDetailsScreen(
         ) {
             when {
                 uiState.isLoading && uiState.plan == null -> {
-                    LoadingView(message = "Loading plan details...")
+                    LoadingView(message = stringResource(R.string.loc_loading_plan_details))
                 }
                 uiState.error != null && uiState.plan == null -> {
                     ErrorView(
-                        message = uiState.error ?: "Failed to load plan",
+                        message = uiState.error ?: stringResource(R.string.loc_failed_load_plan),
                         onRetry = { viewModel.loadPlanDetails() }
                     )
                 }
@@ -187,7 +190,7 @@ fun WorkoutPlanDetailsScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Weekly Schedule",
+                                    text = stringResource(R.string.loc_weekly_schedule_title),
                                     style = androidx.compose.material3.MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = PrimaryText
@@ -199,7 +202,7 @@ fun WorkoutPlanDetailsScreen(
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text("Custom")
+                                    Text(stringResource(R.string.loc_custom))
                                 }
                             }
                             Spacer(modifier = Modifier.height(10.dp))
@@ -207,6 +210,7 @@ fun WorkoutPlanDetailsScreen(
                                 days = plan.days,
                                 selectedDayOfWeek = uiState.selectedDayOfWeek,
                                 dayExercises = uiState.dayExercises,
+                                startDate = uiState.parsedStartDate,
                                 onSelectDay = viewModel::selectDay
                             )
                         }
@@ -214,31 +218,66 @@ fun WorkoutPlanDetailsScreen(
                         // C. Selected Day Header + Add Exercise CTA
                         item {
                             Spacer(modifier = Modifier.height(4.dp))
+                            val selectedDateLabel = WorkoutPlanDateFormatter.formatWorkoutDayDateLabel(
+                                uiState.selectedDayOfWeek,
+                                uiState.parsedStartDate
+                            )
+                            val workoutTitle = when {
+                                selectedDay == null -> stringResource(R.string.loc_not_scheduled)
+                                selectedDay.isRestDay || selectedDay.sessionType.isRest -> stringResource(R.string.rest_day_title)
+                                else -> selectedDay.name ?: selectedDay.sessionType.displayName
+                            }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "${uiState.selectedDayOfWeek.displayName} · ${
-                                            when {
-                                                selectedDay == null -> "Not scheduled"
-                                                selectedDay.isRestDay || selectedDay.sessionType.isRest -> "Rest Day"
-                                                else -> selectedDay.name ?: selectedDay.sessionType.displayName
+                                    if (selectedDateLabel != null) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(Accent.copy(alpha = 0.15f))
+                                                    .border(1.dp, Accent.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
+                                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = selectedDateLabel,
+                                                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Accent
+                                                    )
+                                                )
                                             }
-                                        }",
-                                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = PrimaryText
+                                            Text(
+                                                text = workoutTitle,
+                                                style = androidx.compose.material3.MaterialTheme.typography.titleMedium.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = PrimaryText
+                                                ),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    } else {
+                                        Text(
+                                            text = "${uiState.selectedDayOfWeek.displayName} · $workoutTitle",
+                                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = PrimaryText
+                                            )
                                         )
-                                    )
+                                    }
                                     Text(
                                         text = when {
-                                            selectedDay == null -> "This weekday is not configured in this plan"
-                                            selectedDay.isRestDay || selectedDay.sessionType.isRest -> "Rest and recovery"
+                                            selectedDay == null -> stringResource(R.string.loc_weekday_not_configured)
+                                            selectedDay.isRestDay || selectedDay.sessionType.isRest -> stringResource(R.string.loc_rest_and_recovery)
                                             else -> selectedDay.description?.takeIf { it.isNotBlank() }
-                                                ?: "${currentExercises.size} exercises scheduled"
+                                                ?: stringResource(R.string.loc_exercises_scheduled, currentExercises.size)
                                         },
                                         style = androidx.compose.material3.MaterialTheme.typography.bodySmall.copy(
                                             color = SecondaryText
@@ -248,7 +287,7 @@ fun WorkoutPlanDetailsScreen(
 
                                 TextButton(onClick = viewModel::editSelectedWorkoutDay) {
                                     Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(17.dp))
-                                    Text(" Edit day")
+                                    Text(stringResource(R.string.loc_edit_day))
                                 }
 
                                 if (selectedDay != null && !selectedDay.isRestDay && !selectedDay.sessionType.isRest) {
@@ -268,7 +307,7 @@ fun WorkoutPlanDetailsScreen(
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = "Add Exercise",
+                                            text = stringResource(R.string.add_exercise),
                                             style = androidx.compose.material3.MaterialTheme.typography.labelMedium.copy(
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -323,7 +362,7 @@ fun WorkoutPlanDetailsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Add Exercise",
+                                        text = stringResource(R.string.add_exercise),
                                         style = androidx.compose.material3.MaterialTheme.typography.labelMedium.copy(
                                             fontWeight = FontWeight.Bold
                                         )
@@ -411,14 +450,14 @@ fun WorkoutPlanDetailsScreen(
             onDismissRequest = viewModel::dismissDeleteExerciseDialog,
             title = {
                 Text(
-                    text = "Remove Exercise?",
+                    text = stringResource(R.string.loc_remove_exercise_question),
                     color = PrimaryText,
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
-                    text = "Remove \"${assignment.exercise.name}\" from ${uiState.selectedDayOfWeek.displayName}?",
+                    text = stringResource(R.string.loc_remove_exercise_from_day, assignment.exercise.name, uiState.selectedDayOfWeek.displayName),
                     color = SecondaryText
                 )
             },
@@ -435,13 +474,13 @@ fun WorkoutPlanDetailsScreen(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text("Remove", color = PrimaryText, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.common_remove), color = PrimaryText, fontWeight = FontWeight.SemiBold)
                     }
                 }
             },
             dismissButton = {
                 TextButton(onClick = viewModel::dismissDeleteExerciseDialog) {
-                    Text("Cancel", color = SecondaryText)
+                    Text(stringResource(R.string.cancel), color = SecondaryText)
                 }
             },
             containerColor = Elevated,
@@ -454,14 +493,14 @@ fun WorkoutPlanDetailsScreen(
         AlertDialog(
             onDismissRequest = viewModel::closeEditPlanDialog,
             title = {
-                Text("Rename Plan", color = PrimaryText, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.loc_rename_plan), color = PrimaryText, fontWeight = FontWeight.Bold)
             },
             text = {
                 Column {
                     OutlinedTextField(
                         value = uiState.editPlanName,
                         onValueChange = viewModel::updateEditPlanName,
-                        placeholder = { Text("Plan Name", color = SecondaryText) },
+                        placeholder = { Text(stringResource(R.string.loc_plan_name_label), color = SecondaryText) },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = PrimaryText,
@@ -496,13 +535,13 @@ fun WorkoutPlanDetailsScreen(
                     if (uiState.isUpdatingPlan) {
                         CircularProgressIndicator(color = Ink, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                     } else {
-                        Text("Save", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.common_save), fontWeight = FontWeight.Bold)
                     }
                 }
             },
             dismissButton = {
                 TextButton(onClick = viewModel::closeEditPlanDialog) {
-                    Text("Cancel", color = SecondaryText)
+                    Text(stringResource(R.string.cancel), color = SecondaryText)
                 }
             },
             containerColor = Elevated,
@@ -545,7 +584,7 @@ fun PlanHeaderCard(plan: UserWorkoutPlan) {
                 }
 
                 Text(
-                    text = "${plan.trainingDayCount} training days / week",
+                    text = stringResource(R.string.loc_training_days_per_week, plan.trainingDayCount),
                     style = androidx.compose.material3.MaterialTheme.typography.labelSmall.copy(
                         color = SecondaryText
                     )
@@ -565,7 +604,7 @@ fun PlanHeaderCard(plan: UserWorkoutPlan) {
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = "Structured 7-day calisthenics progression cycle.",
+                text = stringResource(R.string.loc_structured_cycle),
                 style = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(
                     color = SecondaryText
                 )
@@ -579,6 +618,7 @@ fun WeeklyScheduleRow(
     days: List<UserWorkoutPlanDay>,
     selectedDayOfWeek: WorkoutDayOfWeek,
     dayExercises: Map<Long, List<UserWorkoutPlanExercise>>,
+    startDate: java.time.LocalDate? = null,
     onSelectDay: (WorkoutDayOfWeek) -> Unit
 ) {
     Row(
@@ -592,10 +632,11 @@ fun WeeklyScheduleRow(
             val isSelected = dayOfWeek == selectedDayOfWeek
             val isRest = day?.isRestDay == true || day?.sessionType?.isRest == true
             val count = day?.id?.let { dayExercises[it]?.size } ?: 0
+            val dateLabel = WorkoutPlanDateFormatter.formatWorkoutDayDateLabel(dayOfWeek, startDate)
 
             Box(
                 modifier = Modifier
-                    .width(76.dp)
+                    .width(84.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(if (isSelected) Surface else Elevated)
                     .border(
@@ -609,18 +650,19 @@ fun WeeklyScheduleRow(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = dayOfWeek.shortName.uppercase(),
+                        text = dateLabel ?: dayOfWeek.shortName.uppercase(),
                         style = androidx.compose.material3.MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Bold,
                             color = if (isSelected) Accent else SecondaryText
-                        )
+                        ),
+                        maxLines = 1
                     )
 
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
                         text = when {
-                            day == null || isRest -> "Rest"
+                            day == null || isRest -> stringResource(R.string.loc_rest_label_short)
                             !day.name.isNullOrBlank() -> day.name
                             else -> day.sessionType.displayName
                         },
@@ -638,7 +680,7 @@ fun WeeklyScheduleRow(
                     if (isRest) {
                         Icon(
                             imageVector = Icons.Default.Nightlight,
-                            contentDescription = "Rest",
+                            contentDescription = stringResource(R.string.loc_rest_content_description),
                             tint = SecondaryText.copy(alpha = 0.4f),
                             modifier = Modifier.size(14.dp)
                         )
@@ -750,7 +792,7 @@ fun PlanExerciseCard(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.ArrowUpward,
-                                    contentDescription = "Move Up",
+                                    contentDescription = stringResource(R.string.loc_move_up),
                                     tint = if (canMoveUp) SecondaryText else SecondaryText.copy(alpha = 0.25f),
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -762,7 +804,7 @@ fun PlanExerciseCard(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.ArrowDownward,
-                                    contentDescription = "Move Down",
+                                    contentDescription = stringResource(R.string.loc_move_down),
                                     tint = if (canMoveDown) SecondaryText else SecondaryText.copy(alpha = 0.25f),
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -772,7 +814,7 @@ fun PlanExerciseCard(
                         IconButton(onClick = onEditClick, modifier = Modifier.size(30.dp)) {
                             Icon(
                                 imageVector = Icons.Default.Edit,
-                                contentDescription = "Edit Exercise",
+                                contentDescription = stringResource(R.string.loc_edit_exercise),
                                 tint = SecondaryText,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -780,7 +822,7 @@ fun PlanExerciseCard(
                         IconButton(onClick = onDeleteClick, modifier = Modifier.size(30.dp)) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
-                                contentDescription = "Remove Exercise",
+                                contentDescription = stringResource(R.string.loc_remove_exercise),
                                 tint = Error.copy(alpha = 0.8f),
                                 modifier = Modifier.size(18.dp)
                             )
@@ -792,7 +834,7 @@ fun PlanExerciseCard(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = "Play exercise media",
+                                    contentDescription = stringResource(R.string.loc_play_exercise_media),
                                     tint = Accent,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -836,7 +878,7 @@ fun PlanExerciseCard(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Rest: ${assignment.restSeconds}s",
+                            text = stringResource(R.string.loc_rest_seconds_assignment, assignment.restSeconds),
                             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(
                                 color = SecondaryText
                             )
@@ -854,7 +896,7 @@ fun PlanExerciseCard(
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Text(
-                            text = "Notes: ${assignment.notes}",
+                            text = stringResource(R.string.loc_notes_label, assignment.notes),
                             style = androidx.compose.material3.MaterialTheme.typography.bodySmall.copy(
                                 color = SecondaryText
                             )
@@ -899,7 +941,7 @@ fun RestDayView() {
         }
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Rest & Recovery Day",
+            text = stringResource(R.string.loc_rest_recovery_day),
             style = androidx.compose.material3.MaterialTheme.typography.titleMedium.copy(
                 fontWeight = FontWeight.Bold,
                 color = PrimaryText
@@ -907,7 +949,7 @@ fun RestDayView() {
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "Scheduled rest period to allow muscle repair, CNS recovery, and tissue adaptation.",
+            text = stringResource(R.string.loc_rest_recovery_description),
             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(
                 color = SecondaryText
             ),
@@ -943,7 +985,7 @@ fun EmptyDayExerciseView(
         }
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "No Exercises on $dayName",
+            text = stringResource(R.string.loc_no_exercises_on_day, dayName),
             style = androidx.compose.material3.MaterialTheme.typography.titleMedium.copy(
                 fontWeight = FontWeight.Bold,
                 color = PrimaryText
@@ -951,7 +993,7 @@ fun EmptyDayExerciseView(
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "Add calisthenics skills, progressions, or reps to plan your workout session.",
+            text = stringResource(R.string.loc_add_skills_hint),
             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(
                 color = SecondaryText
             ),
@@ -965,7 +1007,7 @@ fun EmptyDayExerciseView(
         ) {
             Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("Add Exercise", fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.add_exercise), fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -1022,9 +1064,9 @@ fun AddEditExerciseBottomSheet(
             ) {
                 Text(
                     text = when {
-                        isEdit -> "Edit Exercise"
-                        selectedExercise != null -> "Configure Exercise"
-                        else -> "Select Exercise"
+                        isEdit -> stringResource(R.string.loc_edit_exercise_title)
+                        selectedExercise != null -> stringResource(R.string.loc_configure_exercise)
+                        else -> stringResource(R.string.loc_select_exercise)
                     },
                     style = androidx.compose.material3.MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
@@ -1032,7 +1074,7 @@ fun AddEditExerciseBottomSheet(
                     )
                 )
                 TextButton(onClick = onDismiss) {
-                    Text("Close", color = SecondaryText)
+                    Text(stringResource(R.string.common_close), color = SecondaryText)
                 }
             }
 
@@ -1043,7 +1085,7 @@ fun AddEditExerciseBottomSheet(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = onSearchChange,
-                    placeholder = { Text("Search exercises...", color = SecondaryText) },
+                    placeholder = { Text(stringResource(R.string.loc_search_exercises_ellipsis), color = SecondaryText) },
                     leadingIcon = {
                         Icon(Icons.Default.Search, contentDescription = null, tint = SecondaryText)
                     },
@@ -1072,7 +1114,7 @@ fun AddEditExerciseBottomSheet(
                     FilterChip(
                         selected = selectedCategory == null,
                         onClick = { onCategorySelect(null) },
-                        label = { Text("All") },
+                        label = { Text(stringResource(R.string.common_all)) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Accent,
                             selectedLabelColor = Ink,
@@ -1105,8 +1147,8 @@ fun AddEditExerciseBottomSheet(
                 } else if (catalogExercises.isEmpty()) {
                     Box(modifier = Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
                         Text(
-                            text = if (searchQuery.isNotBlank()) "No exercises match \"$searchQuery\""
-                            else "No exercises available.",
+                            text = if (searchQuery.isNotBlank()) stringResource(R.string.loc_no_search_exercises, searchQuery)
+                            else stringResource(R.string.loc_no_exercises_available_period),
                             color = SecondaryText,
                             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium
                         )
@@ -1159,7 +1201,7 @@ fun AddEditExerciseBottomSheet(
                         }
                         if (!isEdit) {
                             TextButton(onClick = onBackToCatalog) {
-                                Text("Change", color = Accent)
+                                Text(stringResource(R.string.loc_change), color = Accent)
                             }
                         }
                     }
@@ -1169,7 +1211,7 @@ fun AddEditExerciseBottomSheet(
 
                 // Exercise Type Selection
                 Text(
-                    text = "Exercise Type *",
+                    text = stringResource(R.string.loc_exercise_type_required),
                     color = SecondaryText,
                     style = androidx.compose.material3.MaterialTheme.typography.labelMedium
                 )
@@ -1193,7 +1235,7 @@ fun AddEditExerciseBottomSheet(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Repetition-based",
+                            text = stringResource(R.string.loc_repetition_based),
                             style = androidx.compose.material3.MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = if (isRep) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isRep) Ink else SecondaryText
@@ -1212,7 +1254,7 @@ fun AddEditExerciseBottomSheet(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Duration-based",
+                            text = stringResource(R.string.loc_duration_based),
                             style = androidx.compose.material3.MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = if (isDur) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isDur) Ink else SecondaryText
@@ -1229,7 +1271,7 @@ fun AddEditExerciseBottomSheet(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Sets *", color = SecondaryText, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.loc_sets_required), color = SecondaryText, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
                         Spacer(modifier = Modifier.height(4.dp))
                         OutlinedTextField(
                             value = setsInput,
@@ -1252,7 +1294,7 @@ fun AddEditExerciseBottomSheet(
                     Column(modifier = Modifier.weight(1f)) {
                         val isDuration = prescriptionType == ExercisePrescriptionType.DURATION
                         Text(
-                            text = if (isDuration) "Duration (sec) *" else "Reps *",
+                            text = if (isDuration) stringResource(R.string.loc_duration_reps_required) else stringResource(R.string.loc_reps_required),
                             color = SecondaryText,
                             style = androidx.compose.material3.MaterialTheme.typography.labelMedium
                         )
@@ -1260,7 +1302,7 @@ fun AddEditExerciseBottomSheet(
                         OutlinedTextField(
                             value = if (isDuration) holdDurationInput else repsInput,
                             onValueChange = if (isDuration) onHoldDurationChange else onRepsChange,
-                            placeholder = { Text(if (isDuration) "e.g. 15" else "e.g. 8", color = SecondaryText) },
+                            placeholder = { Text(if (isDuration) stringResource(R.string.loc_example_15) else stringResource(R.string.loc_example_8), color = SecondaryText) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -1281,7 +1323,7 @@ fun AddEditExerciseBottomSheet(
 
                 // Rest Seconds
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("Rest time (seconds) *", color = SecondaryText, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.loc_rest_time_required), color = SecondaryText, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
                     Spacer(modifier = Modifier.height(4.dp))
                     OutlinedTextField(
                         value = restSecondsInput,
@@ -1305,12 +1347,12 @@ fun AddEditExerciseBottomSheet(
 
                 // Notes
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("Notes / Cues (optional)", color = SecondaryText, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.loc_notes_cues_optional), color = SecondaryText, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
                     Spacer(modifier = Modifier.height(4.dp))
                     OutlinedTextField(
                         value = notesInput,
                         onValueChange = onNotesChange,
-                        placeholder = { Text("e.g. Protracted scapula, hollow body position", color = SecondaryText) },
+                        placeholder = { Text(stringResource(R.string.loc_example_cues), color = SecondaryText) },
                         maxLines = 3,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = PrimaryText,
@@ -1353,7 +1395,7 @@ fun AddEditExerciseBottomSheet(
                         CircularProgressIndicator(color = Ink, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     } else {
                         Text(
-                            text = if (isEdit) "Update Exercise" else "Save Exercise to Plan",
+                            text = if (isEdit) stringResource(R.string.loc_update_exercise) else stringResource(R.string.loc_save_exercise_to_plan),
                             style = androidx.compose.material3.MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold
                             )

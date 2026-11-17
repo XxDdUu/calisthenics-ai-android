@@ -26,7 +26,10 @@ fun WorkoutSessionResponseDto.toDomain() = WorkoutSession(
     completedSets,
     totalReps,
     totalHoldDurationSeconds,
-    exercises.map { it.toDomain() }
+    exercises.map { it.toDomain() },
+    classification,
+    gettingStartedEnrollmentId,
+    gettingStartedDayNumber
 )
 
 private fun WorkoutSessionExerciseDto.toDomain() = WorkoutSessionExercise(

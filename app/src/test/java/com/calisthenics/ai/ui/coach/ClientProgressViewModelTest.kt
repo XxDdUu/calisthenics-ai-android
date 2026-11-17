@@ -39,6 +39,7 @@ class ClientProgressViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         coEvery { analyticsRepository.getCoachClientPrRecords(any(), any(), any()) } returns Result.success(emptyList())
+        coEvery { analyticsRepository.getCoachClientSharedPRs(any()) } returns Result.failure(RuntimeException("Fallback to coachSharedPRs"))
         coEvery { analyticsRepository.getCoachClientPrHistory(any(), any(), any()) } returns Result.success(emptyList())
         coEvery { analyticsRepository.getCoachClientExerciseProgress(any(), any(), any()) } returns Result.success(ExerciseProgressDto())
         coEvery { bodyMetricsRepository.getCoachClientBodyMetrics(any()) } returns Result.success(dummyMetrics)

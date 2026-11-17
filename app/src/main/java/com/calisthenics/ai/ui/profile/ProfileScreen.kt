@@ -89,12 +89,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import com.calisthenics.ai.R
 import com.calisthenics.ai.domain.model.ClientProfile
 import com.calisthenics.ai.domain.model.CoachClientRelationship
 import com.calisthenics.ai.domain.model.CoachProfile
+import com.calisthenics.ai.domain.model.Gender
+import com.calisthenics.ai.domain.model.ProfileMediaItem
+import com.calisthenics.ai.domain.model.ProfileType
 import com.calisthenics.ai.domain.model.ConnectedCoachSummary
+import com.calisthenics.ai.domain.model.UserUsage
 import com.calisthenics.ai.ui.auth.GoogleAuthEntryPoint
 import com.calisthenics.ai.ui.auth.GoogleAuthManager
 import dagger.hilt.android.EntryPointAccessors
@@ -104,10 +111,14 @@ import kotlinx.coroutines.withContext
 import com.calisthenics.ai.ui.components.DarkCard
 import com.calisthenics.ai.ui.components.EmptyState
 import com.calisthenics.ai.ui.components.EndRelationshipDialog
+import com.calisthenics.ai.ui.components.GenderEditDialog
+import com.calisthenics.ai.ui.components.GenderOptionSelector
+import com.calisthenics.ai.ui.components.GenderProfileCard
 import com.calisthenics.ai.ui.components.InfoRow
 import com.calisthenics.ai.ui.components.PillBadge
 import com.calisthenics.ai.ui.components.StatCard
 import com.calisthenics.ai.ui.components.UserAvatar
+import com.calisthenics.ai.ui.components.localizedLabel
 import com.calisthenics.ai.ui.navigation.FloatingBottomBarDefaults
 import com.calisthenics.ai.ui.theme.Accent
 import com.calisthenics.ai.ui.theme.Border
@@ -198,6 +209,22 @@ fun ProfileScreen(
         viewModel.load()
     }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var hasResumedOnce by remember { mutableStateOf(false) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (hasResumedOnce) {
+                    viewModel.loadUserUsage(forceRefresh = true)
+                } else {
+                    hasResumedOnce = true
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     var confirmingRelationshipId by remember { mutableStateOf<Long?>(null) }
 
     EndRelationshipDialog(
@@ -232,7 +259,7 @@ fun ProfileScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Profile",
+                stringResource(R.string.profile),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = PrimaryText
@@ -241,14 +268,14 @@ fun ProfileScreen(
                 IconButton(onClick = onOpenSettings) {
                     Icon(
                         Icons.Default.Settings,
-                        contentDescription = "Settings",
+                        contentDescription = stringResource(R.string.settings),
                         tint = SecondaryText
                     )
                 }
                 IconButton(onClick = { viewModel.logout(); onLogout() }) {
                     Icon(
                         Icons.AutoMirrored.Filled.ExitToApp,
-                        contentDescription = "Sign out",
+                        contentDescription = stringResource(R.string.sign_out),
                         tint = SecondaryText
                     )
                 }
@@ -273,7 +300,7 @@ fun ProfileScreen(
                 onClick = { viewModel.selectTab(ProfileTab.CLIENT) },
                 text = {
                     Text(
-                        "Athlete Profile",
+                        stringResource(R.string.loc_athlete_profile),
                         fontWeight = if (state.activeTab == ProfileTab.CLIENT) FontWeight.Bold else FontWeight.Normal,
                         color = if (state.activeTab == ProfileTab.CLIENT) Accent else SecondaryText
                     )
@@ -284,7 +311,7 @@ fun ProfileScreen(
                 onClick = { viewModel.selectTab(ProfileTab.COACH) },
                 text = {
                     Text(
-                        "Coach Profile",
+                        stringResource(R.string.loc_coach_profile),
                         fontWeight = if (state.activeTab == ProfileTab.COACH) FontWeight.Bold else FontWeight.Normal,
                         color = if (state.activeTab == ProfileTab.COACH) Accent else SecondaryText
                     )
@@ -293,7 +320,8 @@ fun ProfileScreen(
         }
 
         // Feedback Banner
-        state.feedback?.let { msg ->
+        val feedbackMessage = state.feedbackResId?.let { stringResource(it) } ?: state.feedback
+        feedbackMessage?.let { msg ->
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -307,7 +335,7 @@ fun ProfileScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(msg, color = Accent, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = Accent, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.loc_dismiss), tint = Accent, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -322,11 +350,24 @@ fun ProfileScreen(
                 ProfileTab.CLIENT -> {
                     ClientProfileView(
                         profile = state.clientProfile,
+                        mediaList = state.athleteMedia,
+                        isMediaLoading = state.isMediaLoading,
+                        isMediaUploading = state.isMediaUploading,
+                        onUploadMedia = { uris -> viewModel.uploadMedia(uris, ProfileType.ATHLETE) },
+                        onDeleteMedia = { id -> viewModel.deleteMedia(id, ProfileType.ATHLETE) },
+                        onReorderMedia = { ids -> viewModel.reorderMedia(ids, ProfileType.ATHLETE) },
+                        onSetCover = { id -> viewModel.setPrimaryCover(id, ProfileType.ATHLETE) },
                         busyChatUserIds = state.busyChatUserIds,
                         busyRelationshipIds = state.busyRelationshipIds,
                         onChangeAvatar = launchAvatarPicker,
                         isAvatarUploading = state.isUploadingAvatar,
+                        userUsage = state.userUsage,
+                        isUsageLoading = state.isUsageLoading,
+                        usageError = state.usageError,
+                        isUsageOffline = state.isUsageOffline,
+                        onRefreshUsage = { viewModel.loadUserUsage(forceRefresh = true) },
                         onEdit = viewModel::startEditingClient,
+                        onEditGender = viewModel::startEditingGender,
                         onViewCoach = onViewCoach,
                         onDiscoverCoaches = onDiscoverCoaches,
                         onOpenChat = { coachId, name, avatar ->
@@ -343,12 +384,26 @@ fun ProfileScreen(
                 ProfileTab.COACH -> {
                     CoachProfileView(
                         profile = state.coachProfile,
+                        fallbackGender = state.clientProfile?.gender,
+                        mediaList = state.coachMedia,
+                        isMediaLoading = state.isMediaLoading,
+                        isMediaUploading = state.isMediaUploading,
+                        onUploadMedia = { uris -> viewModel.uploadMedia(uris, ProfileType.COACH) },
+                        onDeleteMedia = { id -> viewModel.deleteMedia(id, ProfileType.COACH) },
+                        onReorderMedia = { ids -> viewModel.reorderMedia(ids, ProfileType.COACH) },
+                        onSetCover = { id -> viewModel.setPrimaryCover(id, ProfileType.COACH) },
                         activeClients = state.activeClients,
                         busyChatUserIds = state.busyChatUserIds,
                         busyRelationshipIds = state.busyRelationshipIds,
                         onChangeAvatar = launchAvatarPicker,
                         isAvatarUploading = state.isUploadingAvatar,
+                        userUsage = state.userUsage,
+                        isUsageLoading = state.isUsageLoading,
+                        usageError = state.usageError,
+                        isUsageOffline = state.isUsageOffline,
+                        onRefreshUsage = { viewModel.loadUserUsage(forceRefresh = true) },
                         onEdit = viewModel::startEditingCoach,
+                        onEditGender = viewModel::startEditingGender,
                         onViewClient = onViewClient,
                         onOpenChat = { clientId, name, avatar ->
                             viewModel.startChat(clientId) { convId ->
@@ -383,7 +438,7 @@ fun ProfileScreen(
                 tint = Accent
             )
             Spacer(Modifier.width(8.dp))
-            Text("Switch account", fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.switch_account), fontWeight = FontWeight.SemiBold)
         }
 
         Spacer(Modifier.height(8.dp))
@@ -396,7 +451,7 @@ fun ProfileScreen(
         ) {
             Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Sign out")
+            Text(stringResource(R.string.sign_out))
         }
 
         Spacer(Modifier.height(com.calisthenics.ai.ui.navigation.FloatingBottomBarDefaults.ContentBottomPadding))
@@ -423,6 +478,17 @@ fun ProfileScreen(
             onUpdateField = viewModel::updateCoachFormField,
             onSave = viewModel::saveCoachProfile,
             onDismiss = viewModel::cancelEditingCoach
+        )
+    }
+
+    // Edit Gender Dialog
+    if (state.isEditingGender) {
+        GenderEditDialog(
+            initialGender = state.clientProfile?.gender ?: state.coachProfile?.gender,
+            isSaving = state.isSavingGender,
+            errorMessage = state.genderError,
+            onSave = viewModel::saveGender,
+            onDismiss = viewModel::cancelEditingGender
         )
     }
 
@@ -512,7 +578,7 @@ private fun EditableAvatar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.PhotoCamera,
-                        contentDescription = "Change avatar",
+                        contentDescription = stringResource(R.string.change_avatar),
                         tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(17.dp)
                     )
@@ -552,28 +618,28 @@ private fun AvatarPreviewDialog(
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Text(
-                    text = "Preview avatar",
+                    text = stringResource(R.string.loc_preview_avatar),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = PrimaryText
                 )
                 AsyncImage(
                     model = imageUri,
-                    contentDescription = "Selected avatar preview",
+                    contentDescription = stringResource(R.string.loc_selected_avatar_preview),
                     modifier = Modifier
                         .size(168.dp)
                         .clip(androidx.compose.foundation.shape.CircleShape),
                     contentScale = ContentScale.Crop
                 )
                 Text(
-                    text = "This image will be cropped to a circle when displayed.",
+                    text = stringResource(R.string.loc_avatar_crop_hint),
                     style = MaterialTheme.typography.bodyMedium,
                     color = SecondaryText,
                     textAlign = TextAlign.Center
                 )
                 if (!isOnline) {
                     Text(
-                        text = "You're offline. Your selection will stay here until you're connected.",
+                        text = stringResource(R.string.loc_offline_selection),
                         style = MaterialTheme.typography.bodySmall,
                         color = SecondaryText,
                         textAlign = TextAlign.Center
@@ -596,14 +662,14 @@ private fun AvatarPreviewDialog(
                         enabled = !isBusy,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.cancel))
                     }
                     OutlinedButton(
                         onClick = onChooseAnother,
                         enabled = !isBusy,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Choose another")
+                        Text(stringResource(R.string.choose_another))
                     }
                 }
                 Button(
@@ -644,11 +710,24 @@ private fun hasInternetConnection(connectivityManager: ConnectivityManager): Boo
 @Composable
 private fun ClientProfileView(
     profile: ClientProfile?,
+    mediaList: List<ProfileMediaItem> = emptyList(),
+    isMediaLoading: Boolean = false,
+    isMediaUploading: Boolean = false,
+    onUploadMedia: (List<Uri>) -> Unit = {},
+    onDeleteMedia: (Long) -> Unit = {},
+    onReorderMedia: (List<Long>) -> Unit = {},
+    onSetCover: (Long) -> Unit = {},
     busyChatUserIds: Set<Long>,
     busyRelationshipIds: Set<Long> = emptySet(),
     onChangeAvatar: () -> Unit,
     isAvatarUploading: Boolean,
+    userUsage: UserUsage? = null,
+    isUsageLoading: Boolean = false,
+    usageError: String? = null,
+    isUsageOffline: Boolean = false,
+    onRefreshUsage: () -> Unit = {},
     onEdit: () -> Unit,
+    onEditGender: () -> Unit,
     onViewCoach: (Long) -> Unit,
     onDiscoverCoaches: () -> Unit,
     onOpenChat: (Long, String, String?) -> Unit,
@@ -659,8 +738,8 @@ private fun ClientProfileView(
 ) {
     if (profile == null) {
         EmptyState(
-            title = "Client profile not found",
-            body = "Could not load your athlete profile data."
+            title = stringResource(R.string.loc_client_profile_not_found),
+            body = stringResource(R.string.loc_athlete_profile_load_failed)
         )
         return
     }
@@ -685,11 +764,28 @@ private fun ClientProfileView(
                 color = PrimaryText
             )
 
-            profile.experienceLevel?.takeIf(String::isNotBlank)?.let {
-                PillBadge(
-                    text = it.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase),
-                    isAccent = true
-                )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                profile.experienceLevel?.takeIf(String::isNotBlank)?.let {
+                    PillBadge(
+                        text = it.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase),
+                        isAccent = true
+                    )
+                }
+                userUsage?.membership?.let { membership ->
+                    val badgeLabel = when {
+                        membership.isAdmin -> "ADMIN • Unlimited"
+                        membership.isPro && userUsage.videoAnalysis.unlimited -> "PRO • Unlimited"
+                        membership.isPro -> "PRO"
+                        else -> "FREE"
+                    }
+                    PillBadge(
+                        text = badgeLabel,
+                        isAccent = membership.isPro
+                    )
+                }
             }
 
             profile.bio?.takeIf(String::isNotBlank)?.let {
@@ -711,10 +807,37 @@ private fun ClientProfileView(
             ) {
                 Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp), tint = Accent)
                 Spacer(Modifier.width(8.dp))
-                Text("Edit Athlete Profile")
+                Text(stringResource(R.string.loc_edit_athlete_profile))
             }
         }
     }
+
+    // Usage & Quota Section
+    UsageAndQuotaSection(
+        usage = userUsage,
+        isLoading = isUsageLoading,
+        error = usageError,
+        isOffline = isUsageOffline,
+        onRefresh = onRefreshUsage
+    )
+
+    // Gender Row
+    GenderProfileCard(
+        gender = profile.gender,
+        onEditClick = onEditGender
+    )
+
+    // Athlete Profile Media Gallery
+    ProfileMediaGallery(
+        mediaList = mediaList,
+        isOwner = true,
+        isLoading = isMediaLoading,
+        isUploading = isMediaUploading,
+        onUploadMedia = onUploadMedia,
+        onDeleteMedia = onDeleteMedia,
+        onReorderMedia = onReorderMedia,
+        onSetCover = onSetCover
+    )
 
     // Connected Coach Card
     DarkCard(Modifier.fillMaxWidth()) {
@@ -725,7 +848,7 @@ private fun ClientProfileView(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Connected Coach",
+                    stringResource(R.string.loc_connected_coach),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = PrimaryText
@@ -741,7 +864,7 @@ private fun ClientProfileView(
                             if (relId in busyRelationshipIds) {
                                 CircularProgressIndicator(Modifier.size(16.dp), color = SecondaryText, strokeWidth = 2.dp)
                             } else {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = SecondaryText)
+                                Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_options), tint = SecondaryText)
                             }
                         }
                         DropdownMenu(
@@ -800,7 +923,7 @@ private fun ClientProfileView(
                         onClick = { onViewCoach(coach.coachId) },
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("View Profile")
+                        Text(stringResource(R.string.loc_view_profile))
                     }
                     Button(
                         onClick = { onOpenChat(coach.coachId, coach.coachName, coach.coachAvatarUrl) },
@@ -811,14 +934,14 @@ private fun ClientProfileView(
                         if (coach.coachId in busyChatUserIds) {
                             CircularProgressIndicator(Modifier.size(18.dp), color = Ink, strokeWidth = 2.dp)
                         } else {
-                            Text("Message")
+                            Text(stringResource(R.string.common_message))
                         }
                     }
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "No coach connected yet. Connect with an experienced calisthenics coach to get custom training plans, form evaluations, and goal tracking.",
+                        stringResource(R.string.loc_no_coach_connected),
                         style = MaterialTheme.typography.bodyMedium,
                         color = SecondaryText
                     )
@@ -827,7 +950,7 @@ private fun ClientProfileView(
                         colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Discover Coaches")
+                        Text(stringResource(R.string.discover_coaches))
                     }
                 }
             }
@@ -837,7 +960,7 @@ private fun ClientProfileView(
     // Training Overview Card (Real Metrics)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "Training Overview",
+            stringResource(R.string.loc_training_overview),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = PrimaryText
@@ -847,12 +970,12 @@ private fun ClientProfileView(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             StatCard(
-                label = "Active Plans",
+                label = stringResource(R.string.loc_active_plans),
                 value = "${profile.activePlansCount}",
                 modifier = Modifier.weight(1f)
             )
             StatCard(
-                label = "Completed Sessions",
+                label = stringResource(R.string.loc_completed_sessions),
                 value = "${profile.completedSessionsCount}",
                 modifier = Modifier.weight(1f)
             )
@@ -868,7 +991,7 @@ private fun ClientProfileView(
             ) {
                 Icon(Icons.Default.FitnessCenter, contentDescription = null, tint = Accent)
                 Text(
-                    "Current Workout Plan",
+                    stringResource(R.string.loc_current_workout_plan),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = PrimaryText
@@ -886,12 +1009,12 @@ private fun ClientProfileView(
                         onClick = { onViewPlan(profile.currentPlanId) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("View Plan Details")
+                        Text(stringResource(R.string.view_plan_details))
                     }
                 }
             } else {
                 Text(
-                    "You do not have an active workout plan selected.",
+                    stringResource(R.string.loc_you_no_active_plan),
                     style = MaterialTheme.typography.bodyMedium,
                     color = SecondaryText
                 )
@@ -899,7 +1022,7 @@ private fun ClientProfileView(
                     onClick = onBrowsePlans,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Browse Workout Plans")
+                    Text(stringResource(R.string.browse_workout_plans))
                 }
             }
         }
@@ -914,14 +1037,14 @@ private fun ClientProfileView(
             ) {
                 Icon(Icons.Default.MonitorWeight, contentDescription = null, tint = Accent)
                 Text(
-                    "Body Metrics Tracking",
+                    stringResource(R.string.loc_body_metrics_tracking),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = PrimaryText
                 )
             }
             Text(
-                "Track your height, weight changes, body fat %, and circumference measurements.",
+                stringResource(R.string.loc_track_body_metrics_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = SecondaryText
             )
@@ -932,7 +1055,7 @@ private fun ClientProfileView(
                 shape = RoundedCornerShape(12.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Border)
             ) {
-                Text("View & Record Body Metrics")
+                Text(stringResource(R.string.view_body_metrics))
             }
         }
     }
@@ -941,12 +1064,13 @@ private fun ClientProfileView(
     DarkCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                "Training & Experience",
+                stringResource(R.string.loc_training_experience),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = PrimaryText
             )
             InfoRow("Experience Level", profile.experienceLevel?.replace('_', ' ')?.lowercase()?.replaceFirstChar(Char::uppercase))
+            InfoRow(stringResource(R.string.gender), profile.gender.localizedLabel())
             InfoRow("Primary Goals", profile.primaryGoals)
             InfoRow("Training Background", profile.trainingExperience)
             InfoRow("Specific Interests", profile.trainingInterests)
@@ -963,12 +1087,26 @@ private fun ClientProfileView(
 @Composable
 private fun CoachProfileView(
     profile: CoachProfile?,
+    fallbackGender: Gender? = null,
+    mediaList: List<ProfileMediaItem> = emptyList(),
+    isMediaLoading: Boolean = false,
+    isMediaUploading: Boolean = false,
+    onUploadMedia: (List<Uri>) -> Unit = {},
+    onDeleteMedia: (Long) -> Unit = {},
+    onReorderMedia: (List<Long>) -> Unit = {},
+    onSetCover: (Long) -> Unit = {},
     activeClients: List<CoachClientRelationship>,
     busyChatUserIds: Set<Long>,
     busyRelationshipIds: Set<Long> = emptySet(),
     onChangeAvatar: () -> Unit,
     isAvatarUploading: Boolean,
+    userUsage: UserUsage? = null,
+    isUsageLoading: Boolean = false,
+    usageError: String? = null,
+    isUsageOffline: Boolean = false,
+    onRefreshUsage: () -> Unit = {},
     onEdit: () -> Unit,
+    onEditGender: () -> Unit,
     onViewClient: (Long) -> Unit,
     onOpenChat: (Long, String, String?) -> Unit,
     onEndRelationship: (Long) -> Unit = {}
@@ -981,13 +1119,13 @@ private fun CoachProfileView(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    "Become a Coach",
+                    stringResource(R.string.loc_become_coach),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = PrimaryText
                 )
                 Text(
-                    "Set up your coaching profile to offer guidance, assign workout plans, and connect with athletes.",
+                    stringResource(R.string.loc_setup_coach_description),
                     style = MaterialTheme.typography.bodyMedium,
                     color = SecondaryText
                 )
@@ -996,10 +1134,14 @@ private fun CoachProfileView(
                     colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink),
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 ) {
-                    Text("Set up Coach Profile")
+                    Text(stringResource(R.string.set_up_coach_profile))
                 }
             }
         }
+        GenderProfileCard(
+            gender = fallbackGender,
+            onEditClick = onEditGender
+        )
         return
     }
 
@@ -1066,10 +1208,37 @@ private fun CoachProfileView(
             ) {
                 Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp), tint = Accent)
                 Spacer(Modifier.width(8.dp))
-                Text("Edit Coach Profile")
+                Text(stringResource(R.string.edit_coach_profile))
             }
         }
     }
+
+    // Gender Row
+    GenderProfileCard(
+        gender = profile.gender ?: fallbackGender,
+        onEditClick = onEditGender
+    )
+
+    // Usage & Quota Section
+    UsageAndQuotaSection(
+        usage = userUsage,
+        isLoading = isUsageLoading,
+        error = usageError,
+        isOffline = isUsageOffline,
+        onRefresh = onRefreshUsage
+    )
+
+    // Coach Profile Media Gallery
+    ProfileMediaGallery(
+        mediaList = mediaList,
+        isOwner = true,
+        isLoading = isMediaLoading,
+        isUploading = isMediaUploading,
+        onUploadMedia = onUploadMedia,
+        onDeleteMedia = onDeleteMedia,
+        onReorderMedia = onReorderMedia,
+        onSetCover = onSetCover
+    )
 
     // Specialties Chips Card
     profile.specialties?.takeIf(String::isNotBlank)?.let { specs ->
@@ -1078,7 +1247,7 @@ private fun CoachProfileView(
             DarkCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        "Coaching Specialties",
+                        stringResource(R.string.loc_coaching_specialties),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = PrimaryText
@@ -1099,7 +1268,7 @@ private fun CoachProfileView(
     // Real Coaching Statistics Section
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "Coaching Statistics",
+            stringResource(R.string.loc_coaching_statistics),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = PrimaryText
@@ -1109,17 +1278,17 @@ private fun CoachProfileView(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             StatCard(
-                label = "Active Clients",
+                label = stringResource(R.string.loc_active_clients),
                 value = "${profile.activeClientsCount}",
                 modifier = Modifier.weight(1f)
             )
             StatCard(
-                label = "Completed",
+                label = stringResource(R.string.loc_completed),
                 value = "${profile.completedClientsCount}",
                 modifier = Modifier.weight(1f)
             )
             StatCard(
-                label = "Plans Assigned",
+                label = stringResource(R.string.loc_plans_assigned),
                 value = "${profile.assignedPlansCount}",
                 modifier = Modifier.weight(1f)
             )
@@ -1137,7 +1306,7 @@ private fun CoachProfileView(
         DarkCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "Philosophy & Details",
+                    stringResource(R.string.loc_philosophy_details),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = PrimaryText
@@ -1202,7 +1371,7 @@ private fun CoachProfileView(
                                     onClick = { onViewClient(client.clientId) },
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Text("View Profile")
+                                    Text(stringResource(R.string.loc_view_profile))
                                 }
                                 Button(
                                     onClick = { onOpenChat(client.clientId, client.clientName, client.clientAvatarUrl) },
@@ -1213,7 +1382,7 @@ private fun CoachProfileView(
                                     if (client.clientId in busyChatUserIds) {
                                         CircularProgressIndicator(Modifier.size(18.dp), color = Ink, strokeWidth = 2.dp)
                                     } else {
-                                        Text("Message")
+                                        Text(stringResource(R.string.common_message))
                                     }
                                 }
                                 var menuExpanded by remember { mutableStateOf(false) }
@@ -1225,7 +1394,7 @@ private fun CoachProfileView(
                                         if (client.id in busyRelationshipIds) {
                                             CircularProgressIndicator(Modifier.size(16.dp), color = SecondaryText, strokeWidth = 2.dp)
                                         } else {
-                                            Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = SecondaryText)
+                                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_options), tint = SecondaryText)
                                         }
                                     }
                                     DropdownMenu(
@@ -1253,7 +1422,7 @@ private fun CoachProfileView(
                 }
             } else {
                 Text(
-                    "No active clients yet. When clients connect with you, they will appear here.",
+                    stringResource(R.string.loc_no_active_clients),
                     style = MaterialTheme.typography.bodyMedium,
                     color = SecondaryText
                 )
@@ -1298,13 +1467,13 @@ private fun EditClientProfileDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Edit Athlete Profile",
+                        stringResource(R.string.loc_edit_athlete_profile),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryText
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = SecondaryText)
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_close), tint = SecondaryText)
                     }
                 }
 
@@ -1316,7 +1485,7 @@ private fun EditClientProfileDialog(
                 OutlinedTextField(
                     value = form.displayName,
                     onValueChange = { value -> onUpdateField { it.copy(displayName = value) } },
-                    label = { Text("Display Name") },
+                    label = { Text(stringResource(R.string.display_name)) },
                     supportingText = { Text("${form.displayName.length} / 100", color = SecondaryText) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -1332,7 +1501,7 @@ private fun EditClientProfileDialog(
                 OutlinedTextField(
                     value = form.bio,
                     onValueChange = { value -> onUpdateField { it.copy(bio = value) } },
-                    label = { Text("Bio / Introduction") },
+                    label = { Text(stringResource(R.string.bio_introduction)) },
                     supportingText = { Text("${form.bio.length} / 500", color = SecondaryText) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
@@ -1347,7 +1516,7 @@ private fun EditClientProfileDialog(
 
                 // Experience Level Selector
                 Text(
-                    "Experience Level",
+                    stringResource(R.string.loc_experience_level),
                     style = MaterialTheme.typography.labelLarge,
                     color = PrimaryText
                 )
@@ -1369,11 +1538,24 @@ private fun EditClientProfileDialog(
                     }
                 }
 
+                // Gender Selector
+                Text(
+                    stringResource(R.string.gender),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = PrimaryText
+                )
+                GenderOptionSelector(
+                    selectedGender = form.gender,
+                    onSelect = { gender -> onUpdateField { it.copy(gender = gender) } },
+                    enabled = !isSaving,
+                    compact = true
+                )
+
                 // Primary Goals
                 OutlinedTextField(
                     value = form.primaryGoals,
                     onValueChange = { value -> onUpdateField { it.copy(primaryGoals = value) } },
-                    label = { Text("Primary Training Goals") },
+                    label = { Text(stringResource(R.string.primary_training_goals)) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = PrimaryText,
@@ -1387,7 +1569,7 @@ private fun EditClientProfileDialog(
                 OutlinedTextField(
                     value = form.trainingExperience,
                     onValueChange = { value -> onUpdateField { it.copy(trainingExperience = value) } },
-                    label = { Text("Training Background & Experience") },
+                    label = { Text(stringResource(R.string.training_background_experience)) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -1402,7 +1584,7 @@ private fun EditClientProfileDialog(
                 OutlinedTextField(
                     value = form.trainingInterests,
                     onValueChange = { value -> onUpdateField { it.copy(trainingInterests = value) } },
-                    label = { Text("Specific Interests (e.g. Muscle-up, Front Lever)") },
+                    label = { Text(stringResource(R.string.specific_interests)) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = PrimaryText,
@@ -1416,7 +1598,7 @@ private fun EditClientProfileDialog(
                 OutlinedTextField(
                     value = form.preferredFrequency,
                     onValueChange = { value -> onUpdateField { it.copy(preferredFrequency = value) } },
-                    label = { Text("Preferred Frequency (e.g. 4 days/week)") },
+                    label = { Text(stringResource(R.string.preferred_frequency)) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = PrimaryText,
@@ -1430,7 +1612,7 @@ private fun EditClientProfileDialog(
                 OutlinedTextField(
                     value = form.coachingLanguage,
                     onValueChange = { value -> onUpdateField { it.copy(coachingLanguage = value) } },
-                    label = { Text("Preferred Coaching Language") },
+                    label = { Text(stringResource(R.string.preferred_coaching_language)) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = PrimaryText,
@@ -1439,6 +1621,45 @@ private fun EditClientProfileDialog(
                         unfocusedBorderColor = Border
                     )
                 )
+
+                // Height and Weight (Optional)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedTextField(
+                        value = form.heightCm,
+                        onValueChange = { value -> onUpdateField { it.copy(heightCm = value) } },
+                        label = { Text("Height (cm)") },
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
+                        ),
+                        modifier = Modifier.weight(1f),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = PrimaryText,
+                            unfocusedTextColor = PrimaryText,
+                            focusedBorderColor = Accent,
+                            unfocusedBorderColor = Border
+                        )
+                    )
+                    OutlinedTextField(
+                        value = form.weightKg,
+                        onValueChange = { value -> onUpdateField { it.copy(weightKg = value) } },
+                        label = { Text("Weight (kg)") },
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
+                        ),
+                        modifier = Modifier.weight(1f),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = PrimaryText,
+                            unfocusedTextColor = PrimaryText,
+                            focusedBorderColor = Accent,
+                            unfocusedBorderColor = Border
+                        )
+                    )
+                }
 
                 // Actions
                 Row(
@@ -1451,7 +1672,7 @@ private fun EditClientProfileDialog(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.cancel))
                     }
                     Button(
                         onClick = onSave,
@@ -1462,7 +1683,7 @@ private fun EditClientProfileDialog(
                         if (isSaving) {
                             CircularProgressIndicator(Modifier.size(18.dp), color = Ink, strokeWidth = 2.dp)
                         } else {
-                            Text("Save")
+                            Text(stringResource(R.string.common_save))
                         }
                     }
                 }
@@ -1509,13 +1730,13 @@ private fun EditCoachProfileDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Edit Coach Profile",
+                        stringResource(R.string.loc_edit_coach_profile),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryText
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = SecondaryText)
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_close), tint = SecondaryText)
                     }
                 }
 
@@ -1527,7 +1748,7 @@ private fun EditCoachProfileDialog(
                 OutlinedTextField(
                     value = form.displayName,
                     onValueChange = { value -> onUpdateField { it.copy(displayName = value) } },
-                    label = { Text("Display Name") },
+                    label = { Text(stringResource(R.string.display_name)) },
                     supportingText = { Text("${form.displayName.length} / 100", color = SecondaryText) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -1543,7 +1764,7 @@ private fun EditCoachProfileDialog(
                 OutlinedTextField(
                     value = form.bio,
                     onValueChange = { value -> onUpdateField { it.copy(bio = value) } },
-                    label = { Text("Bio / Professional Introduction") },
+                    label = { Text(stringResource(R.string.loc_bio_professional_intro)) },
                     supportingText = { Text("${form.bio.length} / 500", color = SecondaryText) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
@@ -1556,11 +1777,24 @@ private fun EditCoachProfileDialog(
                     )
                 )
 
+                // Gender Selector
+                Text(
+                    stringResource(R.string.gender),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = PrimaryText
+                )
+                GenderOptionSelector(
+                    selectedGender = form.gender,
+                    onSelect = { gender -> onUpdateField { it.copy(gender = gender) } },
+                    enabled = !isSaving,
+                    compact = true
+                )
+
                 // Years of Experience
                 OutlinedTextField(
                     value = form.yearsExperience,
                     onValueChange = { value -> onUpdateField { it.copy(yearsExperience = value) } },
-                    label = { Text("Years of Coaching Experience") },
+                    label = { Text(stringResource(R.string.years_coaching_experience)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -1577,7 +1811,7 @@ private fun EditCoachProfileDialog(
                     OutlinedTextField(
                         value = form.specialties,
                         onValueChange = { value -> onUpdateField { it.copy(specialties = value) } },
-                        label = { Text("Specialties (comma-separated)") },
+                        label = { Text(stringResource(R.string.specialties)) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = PrimaryText,
@@ -1617,7 +1851,7 @@ private fun EditCoachProfileDialog(
                 OutlinedTextField(
                     value = form.trainingPhilosophy,
                     onValueChange = { value -> onUpdateField { it.copy(trainingPhilosophy = value) } },
-                    label = { Text("Training Philosophy") },
+                    label = { Text(stringResource(R.string.training_philosophy)) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -1632,7 +1866,7 @@ private fun EditCoachProfileDialog(
                 OutlinedTextField(
                     value = form.coachingDescription,
                     onValueChange = { value -> onUpdateField { it.copy(coachingDescription = value) } },
-                    label = { Text("Detailed Coaching Description") },
+                    label = { Text(stringResource(R.string.loc_detailed_coaching_description)) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -1647,7 +1881,7 @@ private fun EditCoachProfileDialog(
                 OutlinedTextField(
                     value = form.languages,
                     onValueChange = { value -> onUpdateField { it.copy(languages = value) } },
-                    label = { Text("Languages Spoken") },
+                    label = { Text(stringResource(R.string.languages_spoken)) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = PrimaryText,
@@ -1661,7 +1895,7 @@ private fun EditCoachProfileDialog(
                 OutlinedTextField(
                     value = form.certifications,
                     onValueChange = { value -> onUpdateField { it.copy(certifications = value) } },
-                    label = { Text("Certifications & Qualifications") },
+                    label = { Text(stringResource(R.string.loc_certifications_qualifications)) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -1676,7 +1910,7 @@ private fun EditCoachProfileDialog(
                 OutlinedTextField(
                     value = form.socialLinks,
                     onValueChange = { value -> onUpdateField { it.copy(socialLinks = value) } },
-                    label = { Text("Social & Portfolio Links") },
+                    label = { Text(stringResource(R.string.loc_social_portfolio_links)) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = PrimaryText,
@@ -1693,8 +1927,8 @@ private fun EditCoachProfileDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Public Coach Profile", color = PrimaryText, fontWeight = FontWeight.Medium)
-                        Text("Allow other athletes to discover you", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.public_coach_profile), color = PrimaryText, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.allow_discover), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                     }
                     Switch(
                         checked = form.isPublic,
@@ -1709,8 +1943,8 @@ private fun EditCoachProfileDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Accepting New Clients", color = PrimaryText, fontWeight = FontWeight.Medium)
-                        Text("Allow athletes to send connection requests", color = SecondaryText, style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.accepting_new_clients), color = PrimaryText, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.allow_connection_requests), color = SecondaryText, style = MaterialTheme.typography.bodySmall)
                     }
                     Switch(
                         checked = form.isAcceptingClients,
@@ -1730,7 +1964,7 @@ private fun EditCoachProfileDialog(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.cancel))
                     }
                     Button(
                         onClick = onSave,
@@ -1741,7 +1975,7 @@ private fun EditCoachProfileDialog(
                         if (isSaving) {
                             CircularProgressIndicator(Modifier.size(18.dp), color = Ink, strokeWidth = 2.dp)
                         } else {
-                            Text("Save")
+                            Text(stringResource(R.string.common_save))
                         }
                     }
                 }

@@ -2,10 +2,16 @@ package com.calisthenics.ai.ui.chat.list
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.calisthenics.ai.data.local.AccountSessionGuard
+import com.calisthenics.ai.data.local.AccountSessionManager
 import com.calisthenics.ai.data.remote.websocket.WebSocketState
+import com.calisthenics.ai.domain.model.AiConversationDetail
+import com.calisthenics.ai.domain.model.AiConversationSummary
+import com.calisthenics.ai.domain.model.AiMessage
 import com.calisthenics.ai.domain.model.ChatContact
 import com.calisthenics.ai.domain.model.ChatConversation
 import com.calisthenics.ai.domain.model.UserPresence
+import com.calisthenics.ai.domain.repository.AiChatRepository
 import com.calisthenics.ai.domain.repository.ChatRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -28,28 +34,85 @@ data class ChatListUiState(
     val totalUnreadCount: Long = 0,
     val error: String? = null,
     val isNewChatDialogVisible: Boolean = false,
-    val isCreatingConversation: Boolean = false
+    val isCreatingConversation: Boolean = false,
+    val aiSummary: AiConversationSummary? = null,
+    val isAiSummaryLoading: Boolean = false
 )
 
 @HiltViewModel
 class ChatListViewModel @Inject constructor(
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
+    private val aiChatRepository: AiChatRepository,
+    private val accountSessionManager: AccountSessionManager = AccountSessionManager()
 ) : ViewModel() {
+
+    constructor(
+        chatRepository: ChatRepository,
+        accountSessionManager: AccountSessionManager = AccountSessionManager()
+    ) : this(
+        chatRepository = chatRepository,
+        aiChatRepository = object : AiChatRepository {
+            override suspend fun getConversations(): Result<List<AiConversationSummary>> = Result.success(emptyList())
+            override suspend fun getLatestConversationSummary(): Result<AiConversationSummary?> = Result.success(null)
+            override suspend fun createConversation(title: String?): Result<AiConversationSummary> = Result.failure(NotImplementedError())
+            override suspend fun getConversation(id: Long): Result<AiConversationDetail> = Result.failure(NotImplementedError())
+            override suspend fun deleteConversation(id: Long): Result<Unit> = Result.success(Unit)
+            override suspend fun sendMessage(conversationId: Long, message: String, timezone: String?): Result<AiMessage> = Result.failure(NotImplementedError())
+            override suspend fun sendQuickMessage(message: String, timezone: String?): Result<AiMessage> = Result.failure(NotImplementedError())
+        },
+        accountSessionManager = accountSessionManager
+    )
 
     private val _uiState = MutableStateFlow(ChatListUiState())
     val uiState: StateFlow<ChatListUiState> = _uiState.asStateFlow()
     private var presenceLoadJob: Job? = null
 
+    private val sessionGuard = AccountSessionGuard(
+        parentScope = viewModelScope,
+        sessionManager = accountSessionManager,
+        onSessionCleared = {
+            presenceLoadJob = null
+            _uiState.value = ChatListUiState()
+        },
+        onSessionActive = {
+            startChatSession()
+        }
+    )
+
     init {
+        sessionGuard.startObserving()
+        startChatSession()
+    }
+
+    private fun startChatSession() {
         chatRepository.connectWebSocket()
         loadConversations()
+        loadAiSummary()
         observeIncomingMessages()
         observePresenceUpdates()
         observeWebSocketState()
     }
 
+    fun loadAiSummary() {
+        sessionGuard.launchScoped { captured ->
+            _uiState.update { it.copy(isAiSummaryLoading = true) }
+            aiChatRepository.getLatestConversationSummary()
+                .onSuccess { summary ->
+                    if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
+                    _uiState.update { it.copy(aiSummary = summary, isAiSummaryLoading = false) }
+                }
+                .onFailure {
+                    if (!sessionGuard.isCurrentSession(captured)) return@onFailure
+                    _uiState.update { it.copy(isAiSummaryLoading = false) }
+                }
+        }
+    }
+
     fun loadConversations(isRefresh: Boolean = false) {
-        viewModelScope.launch {
+        if (isRefresh) {
+            loadAiSummary()
+        }
+        sessionGuard.launchScoped { captured ->
             if (isRefresh) {
                 _uiState.update { it.copy(isRefreshing = true, error = null) }
             } else {
@@ -58,6 +121,7 @@ class ChatListViewModel @Inject constructor(
 
             chatRepository.getConversations()
                 .onSuccess { conversations ->
+                    if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
                     val totalUnread = conversations.sumOf { it.unreadCount }
                     _uiState.update {
                         it.copy(
@@ -71,6 +135,7 @@ class ChatListViewModel @Inject constructor(
                     loadPresence()
                 }
                 .onFailure { throwable ->
+                    if (!sessionGuard.isCurrentSession(captured)) return@onFailure
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -83,10 +148,12 @@ class ChatListViewModel @Inject constructor(
     }
 
     private fun observeIncomingMessages() {
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             chatRepository.getIncomingMessages().collect {
+                if (!sessionGuard.isCurrentSession(captured)) return@collect
                 // When an incoming message arrives, refresh conversations to update previews and unread badges
                 chatRepository.getConversations().onSuccess { conversations ->
+                    if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
                     val totalUnread = conversations.sumOf { it.unreadCount }
                     _uiState.update {
                         it.copy(
@@ -100,8 +167,9 @@ class ChatListViewModel @Inject constructor(
     }
 
     private fun observePresenceUpdates() {
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             chatRepository.getPresenceUpdates().collect { presence ->
+                if (!sessionGuard.isCurrentSession(captured)) return@collect
                 _uiState.update { state ->
                     state.copy(presences = mergePresences(state.presences, listOf(presence)))
                 }
@@ -110,9 +178,10 @@ class ChatListViewModel @Inject constructor(
     }
 
     private fun observeWebSocketState() {
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             var wasConnected = false
             chatRepository.getWebSocketState().collect { connectionState ->
+                if (!sessionGuard.isCurrentSession(captured)) return@collect
                 _uiState.update { it.copy(webSocketState = connectionState) }
                 if (connectionState == WebSocketState.CONNECTED && !wasConnected) {
                     loadPresence()
@@ -124,10 +193,11 @@ class ChatListViewModel @Inject constructor(
 
     private fun loadPresence() {
         if (presenceLoadJob?.isActive == true) return
-        presenceLoadJob = viewModelScope.launch {
+        presenceLoadJob = sessionGuard.launchScoped { captured ->
             _uiState.update { it.copy(isPresenceLoading = true, presenceError = null) }
             chatRepository.getConversationPresence()
                 .onSuccess { presences ->
+                    if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
                     _uiState.update { state ->
                         state.copy(
                             isPresenceLoading = false,
@@ -137,6 +207,7 @@ class ChatListViewModel @Inject constructor(
                     }
                 }
                 .onFailure { throwable ->
+                    if (!sessionGuard.isCurrentSession(captured)) return@onFailure
                     _uiState.update {
                         it.copy(
                             isPresenceLoading = false,
@@ -160,9 +231,10 @@ class ChatListViewModel @Inject constructor(
     }
 
     fun showNewChatDialog() {
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             _uiState.update { it.copy(isNewChatDialogVisible = true) }
             chatRepository.getAvailableContacts().onSuccess { contacts ->
+                if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
                 _uiState.update { it.copy(availableContacts = contacts) }
             }
         }
@@ -173,10 +245,11 @@ class ChatListViewModel @Inject constructor(
     }
 
     fun startConversation(otherUserId: Long, onConversationReady: (Long) -> Unit) {
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             _uiState.update { it.copy(isCreatingConversation = true) }
             chatRepository.createOrGetConversation(otherUserId)
                 .onSuccess { conversation ->
+                    if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
                     _uiState.update {
                         it.copy(
                             isCreatingConversation = false,
@@ -186,6 +259,7 @@ class ChatListViewModel @Inject constructor(
                     onConversationReady(conversation.id)
                 }
                 .onFailure { throwable ->
+                    if (!sessionGuard.isCurrentSession(captured)) return@onFailure
                     _uiState.update {
                         it.copy(
                             isCreatingConversation = false,

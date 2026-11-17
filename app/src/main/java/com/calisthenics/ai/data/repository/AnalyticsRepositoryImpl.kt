@@ -43,12 +43,31 @@ class AnalyticsRepositoryImpl @Inject constructor(
         api.getWorkoutSessionRecords(sessionId)
     }
 
-    override suspend fun sharePersonalRecord(prId: Long): Result<SharedPersonalRecordDto> = runCatching {
-        api.sharePersonalRecord(prId)
+    override suspend fun sharePersonalRecord(
+        prId: Long,
+        recipientId: Long?,
+        clientMessageId: String?
+    ): Result<SharedPersonalRecordDto> = runCatching {
+        val body = if (recipientId != null || clientMessageId != null) {
+            SharePrRequestDto(recipientId = recipientId, clientMessageId = clientMessageId)
+        } else {
+            null
+        }
+        api.sharePersonalRecord(prId, body)
     }
 
-    override suspend fun batchSharePRs(prIds: List<Long>): Result<List<SharedPersonalRecordDto>> = runCatching {
-        api.batchSharePRs(BatchSharePrRequestDto(prIds))
+    override suspend fun batchSharePRs(
+        prIds: List<Long>,
+        recipientId: Long?,
+        clientMessageId: String?
+    ): Result<List<SharedPersonalRecordDto>> = runCatching {
+        api.batchSharePRs(
+            BatchSharePrRequestDto(
+                prIds = prIds,
+                recipientId = recipientId,
+                clientMessageId = clientMessageId
+            )
+        )
     }
 
     override suspend fun getClientSharedPRs(): Result<List<SharedPersonalRecordDto>> = runCatching {
@@ -68,6 +87,10 @@ class AnalyticsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getCoachClientPRs(clientId: Long): Result<List<PersonalRecordDto>> = runCatching {
+        api.getCoachClientPrRecords(clientId)
+    }
+
+    override suspend fun getCoachClientSharedPRs(clientId: Long): Result<List<SharedPersonalRecordDto>> = runCatching {
         api.getCoachClientPRs(clientId)
     }
 
@@ -87,8 +110,20 @@ class AnalyticsRepositoryImpl @Inject constructor(
         api.addCoachFeedback(shareId, CoachFeedbackRequestDto(message = feedback, rating = rating))
     }
 
+    private val _notificationUpdates = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+    override val notificationUpdates: kotlinx.coroutines.flow.Flow<Unit> =
+        kotlinx.coroutines.flow.flow { _notificationUpdates.collect { emit(it) } }
+
     override suspend fun getNotifications(unreadOnly: Boolean?): Result<List<NotificationDto>> = runCatching {
         api.getNotifications(unreadOnly)
+    }
+
+    override suspend fun getNotifications(
+        unreadOnly: Boolean?,
+        page: Int?,
+        size: Int?
+    ): Result<List<NotificationDto>> = runCatching {
+        api.getNotifications(unreadOnly, page, size)
     }
 
     override suspend fun getUnreadNotificationsCount(): Result<Long> = runCatching {
@@ -97,10 +132,14 @@ class AnalyticsRepositoryImpl @Inject constructor(
 
     override suspend fun markNotificationAsRead(id: Long): Result<Unit> = runCatching {
         api.markNotificationAsRead(id)
+        _notificationUpdates.tryEmit(Unit)
+        Unit
     }
 
     override suspend fun markAllNotificationsAsRead(): Result<Unit> = runCatching {
         api.markAllNotificationsAsRead()
+        _notificationUpdates.tryEmit(Unit)
+        Unit
     }
 
     // PR Tracking & Analytics

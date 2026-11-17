@@ -6,12 +6,15 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -26,8 +29,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import com.calisthenics.ai.ui.navigation.FloatingBottomBarDefaults
 import androidx.compose.material.icons.filled.Refresh
+import com.calisthenics.ai.ui.profile.ProfileMediaGallery
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -36,14 +41,20 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -72,32 +83,48 @@ import coil.compose.AsyncImage
 import com.calisthenics.ai.R
 import com.calisthenics.ai.domain.model.CoachClientRelationship
 import com.calisthenics.ai.domain.model.CoachProfile
+import com.calisthenics.ai.domain.model.UserWorkoutPlan
 import com.calisthenics.ai.ui.components.DarkCard
 import com.calisthenics.ai.ui.components.EmptyState
 import com.calisthenics.ai.ui.components.EndRelationshipDialog
+import com.calisthenics.ai.ui.components.GenderProfileCard
 import com.calisthenics.ai.ui.components.InfoRow
 import com.calisthenics.ai.ui.components.PillBadge
 import com.calisthenics.ai.ui.components.StatCard
 import com.calisthenics.ai.ui.components.UserAvatar
+import com.calisthenics.ai.ui.report.ReportUserSheet
+import com.calisthenics.ai.ui.review.CoachReviewsSection
+import com.calisthenics.ai.ui.review.RatingChip
+import com.calisthenics.ai.ui.review.formatRating
 import com.calisthenics.ai.ui.theme.Accent
+import com.calisthenics.ai.ui.theme.Border
 import com.calisthenics.ai.ui.theme.Elevated
 import com.calisthenics.ai.ui.theme.Ink
 import com.calisthenics.ai.ui.theme.PrimaryText
 import com.calisthenics.ai.ui.theme.SecondaryText
 import com.calisthenics.ai.ui.theme.Warning
 
-private val tabs = listOf("Discover", "My Coaches", "PR Feedback", "Sent", "Incoming", "My Clients")
+private val tabStringIds = listOf(
+    R.string.loc_tab_discover,
+    R.string.loc_tab_my_coaches,
+    R.string.loc_tab_pr_feedback,
+    R.string.loc_tab_sent,
+    R.string.loc_tab_incoming,
+    R.string.loc_tab_my_clients
+)
 
 @Composable
 fun CoachConnectionsScreen(
     onCoachClick: (Long) -> Unit,
     onChatClick: (Long, Long, String, String?) -> Unit,
     onClientClick: (Long) -> Unit = onCoachClick,
+    onSharedPrClick: (com.calisthenics.ai.data.remote.dto.SharedPersonalRecordDto) -> Unit = {},
     viewModel: CoachConnectionsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var search by rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+    var assignmentSheetOpen by rememberSaveable { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
     var resumedBefore by remember { androidx.compose.runtime.mutableStateOf(false) }
 
@@ -127,13 +154,13 @@ fun CoachConnectionsScreen(
         ) {
             Column {
                 Text(
-                    "Coaching",
+                    stringResource(R.string.loc_coaching),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = PrimaryText
                 )
                 Text(
-                    "Connect with coaches and clients",
+                    stringResource(R.string.loc_connect_coaches_clients),
                     color = SecondaryText,
                     modifier = Modifier.padding(top = 4.dp)
                 )
@@ -151,7 +178,7 @@ fun CoachConnectionsScreen(
                 } else {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = "Reload all",
+                        contentDescription = stringResource(R.string.loc_reload_all),
                         tint = Accent
                     )
                 }
@@ -165,11 +192,11 @@ fun CoachConnectionsScreen(
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            tabs.forEachIndexed { index, title ->
+            tabStringIds.forEachIndexed { index, titleResId ->
                 FilterChip(
                     selected = selectedTab == index,
                     onClick = { selectedTab = index },
-                    label = { Text(title) }
+                    label = { Text(stringResource(titleResId)) }
                 )
             }
         }
@@ -199,16 +226,16 @@ fun CoachConnectionsScreen(
             }
             state.error != null && state.currentUserId == null -> {
                 EmptyState(
-                    title = "Connections unavailable",
-                    body = state.error ?: "Could not load connections",
-                    action = "Retry",
+                    title = stringResource(R.string.connections_unavailable),
+                    body = state.error ?: stringResource(R.string.loc_could_not_load_connections),
+                    action = stringResource(R.string.common_retry),
                     onAction = viewModel::refresh
                 )
             }
             else -> {
                 if (state.error != null) {
                     TextButton(onClick = viewModel::refresh) {
-                        Text("${state.error}  Retry", color = MaterialTheme.colorScheme.error)
+                        Text("${state.error}  ${stringResource(R.string.common_retry)}", color = MaterialTheme.colorScheme.error)
                     }
                 }
                 when (selectedTab) {
@@ -245,8 +272,14 @@ fun CoachConnectionsScreen(
                     )
                     2 -> CoachFeedbacksContent(
                         feedbacks = state.clientFeedbacks,
+                        currentUserId = state.currentUserId,
                         isRefreshing = state.isSectionRefreshing(CoachSection.FEEDBACK),
-                        onReload = viewModel::refreshFeedbacks
+                        error = state.feedbackSectionError,
+                        submittingIds = state.feedbackSubmittingIds,
+                        onReload = viewModel::refreshFeedbacks,
+                        onMarkAsRead = viewModel::markPrShareAsRead,
+                        onSubmitFeedback = viewModel::submitCoachPrFeedback,
+                        onPrCardClick = onSharedPrClick
                     )
                     3 -> PendingConnectionsContent(
                         relationships = state.sentRequests,
@@ -291,6 +324,7 @@ fun CoachConnectionsScreen(
             }
         }
     }
+
 }
 
 @Composable
@@ -315,7 +349,7 @@ private fun DiscoverContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Discover Coaches (${coaches.size})",
+                text = stringResource(R.string.loc_discover_coaches, coaches.size),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = PrimaryText
@@ -333,7 +367,7 @@ private fun DiscoverContent(
                 } else {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = "Reload coaches",
+                        contentDescription = stringResource(R.string.loc_reload_coaches),
                         tint = SecondaryText
                     )
                 }
@@ -343,13 +377,13 @@ private fun DiscoverContent(
             value = query,
             onValueChange = onQueryChange,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-            label = { Text("Search coaches") },
+            label = { Text(stringResource(R.string.search_coaches)) },
             singleLine = true
         )
         if (coaches.isEmpty()) {
             EmptyState(
-                title = if (query.isBlank()) "No coaches found" else "No matching coaches",
-                body = if (query.isBlank()) "There are no other user profiles available yet." else "Try another name or experience level."
+                title = if (query.isBlank()) stringResource(R.string.loc_no_coaches_found) else stringResource(R.string.loc_no_matching_coaches),
+                body = if (query.isBlank()) stringResource(R.string.loc_no_profiles_available) else stringResource(R.string.loc_try_another_search)
             )
         } else {
             LazyColumn(
@@ -362,22 +396,30 @@ private fun DiscoverContent(
                         .filter { it.coachId == coach.id && it.clientId == currentUserId }
                         .maxByOrNull { it.createdAt.orEmpty() }
                     val status = when (relation?.status) {
-                        "PENDING" -> "Request pending"
-                        "ACTIVE" -> "Connected"
-                        "REJECTED" -> "Previously declined"
-                        "CANCELLED" -> "Request canceled"
-                        "TERMINATED" -> "Relationship ended"
-                        else -> "Not connected"
+                        "PENDING" -> stringResource(R.string.loc_request_pending)
+                        "ACTIVE" -> stringResource(R.string.common_connected)
+                        "REJECTED" -> stringResource(R.string.loc_previously_declined)
+                        "CANCELLED" -> stringResource(R.string.loc_request_canceled)
+                        "TERMINATED" -> stringResource(R.string.loc_relationship_ended)
+                        else -> stringResource(R.string.loc_not_connected)
                     }
                     val isSubmitting = coach.id in requestingCoachIds
                     val canRequest = currentUserId != coach.id &&
                         relation?.status !in setOf("PENDING", "ACTIVE") &&
                         !isSubmitting
+                    val level = coach.experienceLevel?.takeIf(String::isNotBlank)?.replace('_', ' ')
+                        ?.lowercase()?.replaceFirstChar(Char::uppercase)
+                    val ratingSummary = if ((coach.reviewCount ?: 0L) > 0L) {
+                        stringResource(
+                            R.string.coach_rating_badge,
+                            formatRating(coach.averageRating),
+                            coach.reviewCount ?: 0L
+                        )
+                    } else null
                     PersonCard(
                         name = coach.fullName,
                         avatarUrl = coach.avatarUrl,
-                        detail = coach.experienceLevel?.takeIf(String::isNotBlank)?.replace('_', ' ')
-                            ?.lowercase()?.replaceFirstChar(Char::uppercase),
+                        detail = listOfNotNull(level, ratingSummary).joinToString(" • ").ifBlank { null },
                         status = status,
                         onClick = { onCoachClick(coach.id) },
                         action = {
@@ -390,11 +432,11 @@ private fun DiscoverContent(
                                 relation?.status == "PENDING" -> OutlinedButton(
                                     onClick = {},
                                     enabled = false
-                                ) { Text("Pending") }
+                                ) { Text(stringResource(R.string.common_pending)) }
                                 relation?.status == "ACTIVE" -> OutlinedButton(
                                     onClick = {},
                                     enabled = false
-                                ) { Text("Connected") }
+                                ) { Text(stringResource(R.string.common_connected)) }
                                 else -> Button(
                                     onClick = { onRequest(coach.id) },
                                     enabled = canRequest,
@@ -402,7 +444,7 @@ private fun DiscoverContent(
                                         containerColor = Accent,
                                         contentColor = Ink
                                     )
-                                ) { Text("Connect") }
+                                ) { Text(stringResource(R.string.common_connect)) }
                             }
                         }
                     )
@@ -426,6 +468,15 @@ private fun ActiveConnectionsContent(
     onEndRelationship: (Long) -> Unit = {}
 ) {
     var confirmingRelationshipId by remember { mutableStateOf<Long?>(null) }
+    var reportingPerson by remember { mutableStateOf<RelationshipPerson?>(null) }
+
+    reportingPerson?.let { target ->
+        ReportUserSheet(
+            userId = target.id,
+            userName = target.name,
+            onDismiss = { reportingPerson = null }
+        )
+    }
 
     EndRelationshipDialog(
         isOpen = confirmingRelationshipId != null,
@@ -448,37 +499,39 @@ private fun ActiveConnectionsContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (isCoach) "My Coaches (${relationships.size})" else "My Clients (${relationships.size})",
+                text = if (isCoach) stringResource(R.string.loc_my_coaches, relationships.size) else stringResource(R.string.loc_my_clients, relationships.size),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = PrimaryText
             )
-            IconButton(
-                onClick = onReload,
-                enabled = !isRefreshing
-            ) {
-                if (isRefreshing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        color = Accent,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = if (isCoach) "Reload my coaches" else "Reload my clients",
-                        tint = SecondaryText
-                    )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = onReload,
+                    enabled = !isRefreshing
+                ) {
+                    if (isRefreshing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = Accent,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = if (isCoach) stringResource(R.string.loc_reload_my_coaches) else stringResource(R.string.loc_reload_my_clients),
+                            tint = SecondaryText
+                        )
+                    }
                 }
             }
         }
 
         if (relationships.isEmpty()) {
             EmptyState(
-                title = if (isCoach) "No coaches yet" else "No clients yet",
-                body = if (isCoach) "Discover coaches to start building your coaching team."
-                else "Accepted client connections will appear here.",
-                action = if (isCoach && onDiscover != null) "Discover coaches" else null,
+                title = if (isCoach) stringResource(R.string.loc_no_coaches_yet) else stringResource(R.string.loc_no_clients_yet),
+                body = if (isCoach) stringResource(R.string.loc_discover_coaches_hint)
+                else stringResource(R.string.loc_accepted_connections),
+                action = if (isCoach && onDiscover != null) stringResource(R.string.loc_discover_coaches) else null,
                 onAction = { onDiscover?.invoke() }
             )
         } else {
@@ -493,7 +546,7 @@ private fun ActiveConnectionsContent(
                         name = person.name,
                         avatarUrl = person.avatar,
                         detail = person.experience,
-                        status = "Connected",
+                        status = stringResource(R.string.common_connected),
                         onClick = { onProfile(person.id) },
                         action = {
                             Row(
@@ -508,7 +561,7 @@ private fun ActiveConnectionsContent(
                                     if (person.id in busyChatUserIds) {
                                         CircularProgressIndicator(Modifier.size(18.dp), color = Ink, strokeWidth = 2.dp)
                                     } else {
-                                        Text("Message")
+                                        Text(stringResource(R.string.common_message))
                                     }
                                 }
                                 var menuExpanded by remember { mutableStateOf(false) }
@@ -520,7 +573,7 @@ private fun ActiveConnectionsContent(
                                         if (relationship.id in busyRelationshipIds) {
                                             CircularProgressIndicator(Modifier.size(16.dp), color = SecondaryText, strokeWidth = 2.dp)
                                         } else {
-                                            Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = SecondaryText)
+                                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_options), tint = SecondaryText)
                                         }
                                     }
                                     DropdownMenu(
@@ -528,6 +581,18 @@ private fun ActiveConnectionsContent(
                                         onDismissRequest = { menuExpanded = false },
                                         modifier = Modifier.background(Elevated)
                                     ) {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    stringResource(R.string.report_user),
+                                                    color = PrimaryText
+                                                )
+                                            },
+                                            onClick = {
+                                                menuExpanded = false
+                                                reportingPerson = person
+                                            }
+                                        )
                                         DropdownMenuItem(
                                             text = {
                                                 Text(
@@ -547,6 +612,236 @@ private fun ActiveConnectionsContent(
                     )
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AssignmentBottomSheet(
+    relationships: List<CoachClientRelationship>,
+    plans: List<UserWorkoutPlan>,
+    isLoading: Boolean,
+    isSubmitting: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
+    onAssign: (Long, Long, () -> Unit) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var athleteQuery by rememberSaveable { mutableStateOf("") }
+    var selectedRelationshipId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var selectedPlanId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val filteredRelationships = relationships.filter {
+        it.clientName.contains(athleteQuery.trim(), ignoreCase = true)
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .navigationBarsPadding()
+        ) {
+            Text(
+                text = stringResource(R.string.assign_workout),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = stringResource(R.string.assign_workout_subtitle),
+                color = SecondaryText,
+                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+            )
+
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = Accent)
+                }
+            } else {
+                Text(
+                    text = stringResource(R.string.select_athlete),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = SecondaryText,
+                    fontWeight = FontWeight.Bold
+                )
+                OutlinedTextField(
+                    value = athleteQuery,
+                    onValueChange = { athleteQuery = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.search_athletes)) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
+                )
+                if (filteredRelationships.isEmpty()) {
+                    Text(
+                        text = stringResource(
+                            if (relationships.isEmpty()) R.string.no_connected_athletes
+                            else R.string.no_matching_athletes
+                        ),
+                        color = SecondaryText,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(filteredRelationships, key = { it.id }) { relationship ->
+                            val selected = relationship.id == selectedRelationshipId
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .clickable { selectedRelationshipId = relationship.id },
+                                color = if (selected) Accent.copy(alpha = 0.16f)
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    UserAvatar(
+                                        url = relationship.clientAvatarUrl,
+                                        modifier = Modifier.size(38.dp)
+                                    )
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 10.dp)
+                                    ) {
+                                        Text(
+                                            relationship.clientName,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        relationship.clientExperienceLevel
+                                            ?.takeIf(String::isNotBlank)
+                                            ?.let { Text(it, color = SecondaryText, fontSize = 12.sp) }
+                                    }
+                                    RadioButton(
+                                        selected = selected,
+                                        onClick = { selectedRelationshipId = relationship.id }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    text = stringResource(R.string.select_workout_plan),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = SecondaryText,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+                )
+                if (plans.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.no_available_workout_plans),
+                        color = SecondaryText,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(170.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(plans, key = { it.id }) { plan ->
+                            PlanSelectionRow(
+                                plan = plan,
+                                selected = plan.id == selectedPlanId,
+                                onClick = { selectedPlanId = plan.id }
+                            )
+                        }
+                    }
+                }
+            }
+
+            error?.let {
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 10.dp)
+                )
+                TextButton(onClick = onRetry, enabled = !isSubmitting) {
+                    Text(stringResource(R.string.common_retry))
+                }
+            }
+            Button(
+                onClick = {
+                    val relationshipId = selectedRelationshipId
+                    val planId = selectedPlanId
+                    if (relationshipId != null && planId != null) {
+                        onAssign(relationshipId, planId, onDismiss)
+                    }
+                },
+                enabled = selectedRelationshipId != null && selectedPlanId != null && !isSubmitting,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, bottom = 12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink)
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Ink,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(stringResource(R.string.assign_workout))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlanSelectionRow(
+    plan: UserWorkoutPlan,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick),
+        color = if (selected) Accent.copy(alpha = 0.16f)
+        else MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(plan.name, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = stringResource(R.string.plan_assignment_summary, plan.trainingDayCount, plan.splitType.displayName),
+                    color = SecondaryText,
+                    fontSize = 12.sp
+                )
+            }
+            RadioButton(selected = selected, onClick = onClick)
         }
     }
 }
@@ -573,7 +868,7 @@ private fun PendingConnectionsContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (isIncoming) "Incoming Requests (${relationships.size})" else "Sent Requests (${relationships.size})",
+                text = if (isIncoming) stringResource(R.string.loc_incoming_requests, relationships.size) else stringResource(R.string.loc_sent_requests, relationships.size),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = PrimaryText
@@ -591,7 +886,7 @@ private fun PendingConnectionsContent(
                 } else {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = if (isIncoming) "Reload incoming requests" else "Reload sent requests",
+                        contentDescription = if (isIncoming) stringResource(R.string.loc_reload_incoming) else stringResource(R.string.loc_reload_sent),
                         tint = SecondaryText
                     )
                 }
@@ -600,11 +895,19 @@ private fun PendingConnectionsContent(
 
         if (relationships.isEmpty()) {
             EmptyState(
-                title = if (isIncoming) "No incoming requests" else "No sent requests",
-                body = if (isIncoming) "New connection requests will appear here."
-                else "Connection requests you send will appear here."
+                title = if (isIncoming) stringResource(R.string.loc_no_incoming_requests) else stringResource(R.string.loc_no_sent_requests),
+                body = if (isIncoming) stringResource(R.string.loc_new_connection_requests)
+                else stringResource(R.string.loc_sent_requests_description)
             )
         } else {
+            var reportingPerson by remember { mutableStateOf<RelationshipPerson?>(null) }
+            reportingPerson?.let { target ->
+                ReportUserSheet(
+                    userId = target.id,
+                    userName = target.name,
+                    onDismiss = { reportingPerson = null }
+                )
+            }
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = FloatingBottomBarDefaults.ContentBottomPadding),
@@ -617,6 +920,12 @@ private fun PendingConnectionsContent(
                     } else {
                         relationship.person(isCoach = false)
                     }
+                    val otherParty = if (currentUserId == relationship.coachId) {
+                        relationship.person(isCoach = false)
+                    } else {
+                        relationship.person(isCoach = true)
+                    }
+                    var menuExpanded by remember { mutableStateOf(false) }
                     val isBusy = relationship.id in busyIds
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -628,10 +937,14 @@ private fun PendingConnectionsContent(
                                 name = person.name,
                                 avatarUrl = person.avatar,
                                 detail = person.experience,
-                                status = "Requested ${relationship.createdAt?.take(10) ?: "recently"}",
+                                status = stringResource(R.string.loc_requested_recently, relationship.createdAt?.take(10) ?: stringResource(R.string.loc_recently)),
                                 modifier = Modifier.clickable { onProfile(person.id) }
                             )
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
                                 if (isIncoming) {
                                     Button(
                                         onClick = { onAccept(relationship.id) },
@@ -643,12 +956,12 @@ private fun PendingConnectionsContent(
                                     ) {
                                         if (isBusy) CircularProgressIndicator(
                                             Modifier.size(18.dp), color = Ink, strokeWidth = 2.dp
-                                        ) else Text("Accept")
+                                        ) else Text(stringResource(R.string.common_accept))
                                     }
                                     OutlinedButton(
                                         onClick = { onReject(relationship.id) },
                                         enabled = !isBusy
-                                    ) { Text("Reject") }
+                                    ) { Text(stringResource(R.string.common_reject)) }
                                 } else {
                                     OutlinedButton(
                                         onClick = { onCancel(relationship.id) },
@@ -656,7 +969,37 @@ private fun PendingConnectionsContent(
                                     ) {
                                         if (isBusy) CircularProgressIndicator(
                                             Modifier.size(18.dp), color = Accent, strokeWidth = 2.dp
-                                        ) else Text("Cancel request")
+                                        ) else Text(stringResource(R.string.cancel_request))
+                                    }
+                                }
+                                if (currentUserId != null && otherParty.id != currentUserId) {
+                                    Spacer(Modifier.weight(1f))
+                                    Box {
+                                        IconButton(onClick = { menuExpanded = true }) {
+                                            Icon(
+                                                Icons.Default.MoreVert,
+                                                contentDescription = stringResource(R.string.more_options),
+                                                tint = SecondaryText
+                                            )
+                                        }
+                                        DropdownMenu(
+                                            expanded = menuExpanded,
+                                            onDismissRequest = { menuExpanded = false },
+                                            modifier = Modifier.background(Elevated)
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        stringResource(R.string.report_user),
+                                                        color = PrimaryText
+                                                    )
+                                                },
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    reportingPerson = otherParty
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -668,6 +1011,7 @@ private fun PendingConnectionsContent(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CoachProfileScreen(
     coachId: Long,
@@ -680,8 +1024,20 @@ fun CoachProfileScreen(
 
     var showEndDialog by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
+    var showReportSheet by remember { mutableStateOf(false) }
 
     val currentUserId = state.currentUserId
+    val reportName = state.selectedProfile
+        ?.takeIf { state.selectedProfileId == coachId }
+        ?.let { it.displayName.ifBlank { it.fullName } }
+        ?: stringResource(R.string.loc_coach_profile)
+    if (showReportSheet && currentUserId != null && currentUserId != coachId) {
+        ReportUserSheet(
+            userId = coachId,
+            userName = reportName,
+            onDismiss = { showReportSheet = false }
+        )
+    }
     val relation = state.relationships
         .filter {
             (it.coachId == coachId && it.clientId == currentUserId) ||
@@ -719,10 +1075,10 @@ fun CoachProfileScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PrimaryText)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back), tint = PrimaryText)
             }
             Text(
-                "Coach Profile",
+                stringResource(R.string.loc_coach_profile),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = PrimaryText
@@ -741,18 +1097,15 @@ fun CoachProfileScreen(
                 } else {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = "Reload profile",
+                        contentDescription = stringResource(R.string.loc_reload_profile),
                         tint = Accent
                     )
                 }
             }
-            if (relation?.status == "ACTIVE") {
+            if (currentUserId != null && currentUserId != coachId) {
                 Box {
-                    IconButton(
-                        onClick = { menuExpanded = true },
-                        enabled = relation.id !in state.busyRelationshipIds
-                    ) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = SecondaryText)
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_options), tint = SecondaryText)
                     }
                     DropdownMenu(
                         expanded = menuExpanded,
@@ -762,15 +1115,30 @@ fun CoachProfileScreen(
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    stringResource(R.string.end_relationship),
-                                    color = MaterialTheme.colorScheme.error
+                                    stringResource(R.string.report_user),
+                                    color = PrimaryText
                                 )
                             },
                             onClick = {
                                 menuExpanded = false
-                                showEndDialog = true
+                                showReportSheet = true
                             }
                         )
+                        if (relation?.status == "ACTIVE") {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(R.string.end_relationship),
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                },
+                                enabled = relation.id !in state.busyRelationshipIds,
+                                onClick = {
+                                    menuExpanded = false
+                                    showEndDialog = true
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -784,9 +1152,9 @@ fun CoachProfileScreen(
             }
             state.profileError != null && state.selectedProfileId == coachId && state.selectedProfile == null -> {
                 EmptyState(
-                    title = "Profile unavailable",
-                    body = state.profileError ?: "Could not load this profile.",
-                    action = "Retry",
+                    title = stringResource(R.string.loc_profile_unavailable),
+                    body = state.profileError ?: stringResource(R.string.loc_could_not_load_profile),
+                    action = stringResource(R.string.common_retry),
                     onAction = { viewModel.loadCoachProfile(coachId) }
                 )
             }
@@ -811,7 +1179,9 @@ fun CoachProfileScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        UserAvatar(coach.avatarUrl, modifier = Modifier.size(100.dp))
+                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+    UserAvatar(coach.avatarUrl, modifier = Modifier.size(100.dp))
+}
 
                         Text(
                             text = coach.displayName.ifBlank { coach.fullName },
@@ -821,17 +1191,20 @@ fun CoachProfileScreen(
                         )
 
                         // Badges Row
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            if ((coach.reviewCount ?: 0L) > 0L) {
+                                RatingChip(averageRating = coach.averageRating, reviewCount = coach.reviewCount)
+                            }
                             if (coach.isVerified) {
-                                PillBadge("Verified Coach", isAccent = true)
+                                PillBadge(stringResource(R.string.loc_verified_coach), isAccent = true)
                             }
                             if (coach.isAcceptingClients) {
-                                PillBadge("Accepting Clients", isAccent = true)
+                                PillBadge(stringResource(R.string.loc_accepting_clients), isAccent = true)
                             } else {
-                                PillBadge("Not Accepting Clients")
+                                PillBadge(stringResource(R.string.loc_not_accepting_clients))
                             }
                             coach.experienceLevel?.takeIf(String::isNotBlank)?.let {
                                 PillBadge(it.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase))
@@ -849,13 +1222,23 @@ fun CoachProfileScreen(
 
                         coach.yearsExperience?.let { years ->
                             Text(
-                                text = "$years ${if (years == 1) "year" else "years"} coaching experience",
+                                text = if (years == 1) stringResource(R.string.loc_year_coaching_experience, years) else stringResource(R.string.loc_years_coaching_experience, years),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = Accent
                             )
                         }
                     }
                 }
+
+                // Gender Row
+                GenderProfileCard(gender = coach.gender)
+
+                // Coach Media Gallery (view-only for visitors)
+                ProfileMediaGallery(
+                    mediaList = state.coachMedia,
+                    isOwner = coach.userId == currentUserId,
+                    isLoading = state.isCoachMediaLoading
+                )
 
                 // Specialties Section
                 coach.specialties?.takeIf(String::isNotBlank)?.let { specs ->
@@ -864,7 +1247,7 @@ fun CoachProfileScreen(
                         DarkCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text(
-                                    "Specialties",
+                                    stringResource(R.string.loc_specialties),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
                                     color = PrimaryText
@@ -885,7 +1268,7 @@ fun CoachProfileScreen(
                 // Real Coaching Statistics Section
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Coaching Statistics",
+                        stringResource(R.string.loc_coaching_statistics),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = PrimaryText
@@ -895,17 +1278,17 @@ fun CoachProfileScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         StatCard(
-                            label = "Active Clients",
+                            label = stringResource(R.string.loc_active_clients),
                             value = "${coach.activeClientsCount}",
                             modifier = Modifier.weight(1f)
                         )
                         StatCard(
-                            label = "Completed",
+                            label = stringResource(R.string.loc_completed),
                             value = "${coach.completedClientsCount}",
                             modifier = Modifier.weight(1f)
                         )
                         StatCard(
-                            label = "Plans Assigned",
+                            label = stringResource(R.string.loc_plans_assigned),
                             value = "${coach.assignedPlansCount}",
                             modifier = Modifier.weight(1f)
                         )
@@ -923,16 +1306,16 @@ fun CoachProfileScreen(
                     DarkCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text(
-                                "About Coaching",
+                                stringResource(R.string.loc_about_coaching),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = PrimaryText
                             )
-                            if (hasPhilosophy) InfoRow("Training Philosophy", coach.trainingPhilosophy)
-                            if (hasDescription) InfoRow("Coaching Overview", coach.coachingDescription)
-                            if (hasLanguages) InfoRow("Languages", coach.languages)
-                            if (hasCerts) InfoRow("Certifications & Qualifications", coach.certifications)
-                            if (hasSocial) InfoRow("Social & Portfolio", coach.socialLinks)
+                            if (hasPhilosophy) InfoRow(stringResource(R.string.loc_training_philosophy), coach.trainingPhilosophy)
+                            if (hasDescription) InfoRow(stringResource(R.string.loc_coaching_overview), coach.coachingDescription)
+                            if (hasLanguages) InfoRow(stringResource(R.string.loc_languages), coach.languages)
+                            if (hasCerts) InfoRow(stringResource(R.string.loc_certifications), coach.certifications)
+                            if (hasSocial) InfoRow(stringResource(R.string.loc_social_portfolio), coach.socialLinks)
                         }
                     }
                 }
@@ -941,29 +1324,29 @@ fun CoachProfileScreen(
                 DarkCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            "Coaching Connection",
+                            stringResource(R.string.loc_coaching_connection),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = PrimaryText
                         )
 
                         val statusText = when {
-                            currentUserId == coach.id -> "This is your public coach profile."
-                            relation?.status == "ACTIVE" -> "You are actively connected with this coach."
+                            currentUserId == coach.id -> stringResource(R.string.loc_public_coach_profile)
+                            relation?.status == "ACTIVE" -> stringResource(R.string.loc_active_connected_coach)
                             relation?.status == "PENDING" && relation.requestedBy == currentUserId ->
-                                "Connection request sent and pending coach approval."
+                                stringResource(R.string.loc_request_sent_pending)
                             relation?.status == "PENDING" && relation.requestedBy != currentUserId ->
-                                "This coach sent you a connection request."
+                                stringResource(R.string.loc_coach_sent_request)
                             relation?.status == "REJECTED" ->
-                                "Your previous connection request was declined. You can send a new request."
+                                stringResource(R.string.loc_previous_request_declined)
                             relation?.status == "CANCELLED" ->
-                                "Your previous request was canceled. You can send a new request."
+                                stringResource(R.string.loc_previous_request_canceled)
                             relation?.status == "TERMINATED" ->
-                                "Your previous coaching relationship has ended. You can send a new request."
+                                stringResource(R.string.loc_relationship_ended_request)
                             !coach.isAcceptingClients ->
-                                "This coach is currently not accepting new clients."
+                                stringResource(R.string.loc_coach_not_accepting)
                             else ->
-                                "Connect with this coach to receive tailored training plans, workout reviews, and 1-on-1 guidance."
+                                stringResource(R.string.loc_connect_coach_guidance)
                         }
 
                         Text(
@@ -985,7 +1368,7 @@ fun CoachProfileScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink)
                                     ) {
-                                        Text("Message Coach")
+                                        Text(stringResource(R.string.loc_message_coach))
                                     }
                                     TextButton(
                                         onClick = { showEndDialog = true },
@@ -1007,14 +1390,14 @@ fun CoachProfileScreen(
                                         modifier = Modifier.weight(1f),
                                         colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink)
                                     ) {
-                                        Text("Accept")
+                                        Text(stringResource(R.string.common_accept))
                                     }
                                     OutlinedButton(
                                         onClick = { viewModel.rejectRequest(responseRelationship.id) },
                                         enabled = responseRelationship.id !in state.busyRelationshipIds,
                                         modifier = Modifier.weight(1f)
                                     ) {
-                                        Text("Reject")
+                                        Text(stringResource(R.string.common_reject))
                                     }
                                 }
                             }
@@ -1028,14 +1411,14 @@ fun CoachProfileScreen(
                                         enabled = false,
                                         modifier = Modifier.weight(1f)
                                     ) {
-                                        Text("Pending")
+                                        Text(stringResource(R.string.common_pending))
                                     }
                                     OutlinedButton(
                                         onClick = { viewModel.cancelRequest(relation.id) },
                                         enabled = relation.id !in state.busyRelationshipIds,
                                         modifier = Modifier.weight(1f)
                                     ) {
-                                        Text("Cancel Request")
+                                        Text(stringResource(R.string.loc_cancel_request))
                                     }
                                 }
                             }
@@ -1049,13 +1432,18 @@ fun CoachProfileScreen(
                                     if (submitting) {
                                         CircularProgressIndicator(Modifier.size(20.dp), color = Ink, strokeWidth = 2.dp)
                                     } else {
-                                        Text(if (coach.isAcceptingClients) "Connect with Coach" else "Not Accepting Clients")
+                                        Text(if (coach.isAcceptingClients) stringResource(R.string.loc_connect_with_coach) else stringResource(R.string.loc_not_accepting_clients))
                                     }
                                 }
                             }
                         }
                     }
                 }
+
+                CoachReviewsSection(
+                    coachId = coach.id,
+                    isOwnProfile = currentUserId == coach.id
+                )
 
                 state.feedback?.let {
                     Text(it, color = Accent, style = MaterialTheme.typography.bodySmall)
@@ -1146,7 +1534,7 @@ private fun CoachAvatar(url: String?, modifier: Modifier = Modifier.size(54.dp))
         ) {
             androidx.compose.material3.Icon(
                 Icons.Default.Person,
-                contentDescription = "Profile avatar",
+                contentDescription = stringResource(R.string.profile_avatar_content_description),
                 tint = SecondaryText,
                 modifier = Modifier.size(30.dp)
             )
@@ -1154,7 +1542,7 @@ private fun CoachAvatar(url: String?, modifier: Modifier = Modifier.size(54.dp))
     } else {
         AsyncImage(
             model = url,
-            contentDescription = "Profile avatar",
+            contentDescription = stringResource(R.string.profile_avatar_content_description),
             modifier = modifier.clip(CircleShape),
             contentScale = ContentScale.Crop
         )
@@ -1177,9 +1565,25 @@ private fun CoachClientRelationship.person(isCoach: Boolean) = if (isCoach) {
 @Composable
 private fun CoachFeedbacksContent(
     feedbacks: List<com.calisthenics.ai.data.remote.dto.SharedPersonalRecordDto>,
+    currentUserId: Long?,
     isRefreshing: Boolean,
-    onReload: () -> Unit
+    error: String?,
+    submittingIds: Set<Long>,
+    onReload: () -> Unit,
+    onMarkAsRead: (Long) -> Unit,
+    onSubmitFeedback: (Long, String, Int?) -> Unit,
+    onPrCardClick: (com.calisthenics.ai.data.remote.dto.SharedPersonalRecordDto) -> Unit
 ) {
+    if (error != null && feedbacks.isEmpty()) {
+        EmptyState(
+            title = stringResource(R.string.connections_unavailable),
+            body = error,
+            action = stringResource(R.string.common_retry),
+            onAction = onReload
+        )
+        return
+    }
+
     if (feedbacks.isEmpty()) {
         Column(
             modifier = Modifier
@@ -1189,29 +1593,32 @@ private fun CoachFeedbacksContent(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                "No Coach Feedback Yet",
+                stringResource(R.string.loc_no_coach_feedback),
                 style = MaterialTheme.typography.titleMedium,
                 color = PrimaryText,
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "When your coach reviews a shared PR, their feedback and ratings will appear here.",
+                stringResource(R.string.loc_coach_feedback_empty_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = SecondaryText,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.padding(horizontal = 24.dp)
             )
             Spacer(Modifier.height(16.dp))
-            OutlinedButton(onClick = onReload) {
-                Text("Refresh")
+            OutlinedButton(onClick = onReload, enabled = !isRefreshing) {
+                Text(stringResource(R.string.common_refresh))
             }
         }
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(vertical = 12.dp)
+            contentPadding = PaddingValues(
+                top = 12.dp,
+                bottom = FloatingBottomBarDefaults.ContentBottomPadding
+            )
         ) {
             item {
                 Row(
@@ -1220,92 +1627,286 @@ private fun CoachFeedbacksContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Coach Feedback (${feedbacks.size})",
+                        stringResource(R.string.loc_coach_feedback_count, feedbacks.size),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryText
                     )
                     IconButton(onClick = onReload, enabled = !isRefreshing) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Accent)
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.common_refresh), tint = Accent)
+                    }
+                }
+            }
+
+            if (error != null) {
+                item {
+                    TextButton(onClick = onReload) {
+                        Text("$error  ${stringResource(R.string.common_retry)}", color = MaterialTheme.colorScheme.error)
                     }
                 }
             }
 
             items(feedbacks, key = { it.id }) { item ->
+                val isCoachViewer = currentUserId != null && item.coachUserId == currentUserId
+                var feedbackInput by remember(item.id, item.coachFeedback) {
+                    mutableStateOf(item.coachFeedback ?: "")
+                }
+                var selectedRating by remember(item.id, item.rating) {
+                    mutableIntStateOf(item.rating ?: 5)
+                }
+                val isSubmitting = item.id in submittingIds
+
+                LaunchedEffect(item.id, item.isRead, isCoachViewer) {
+                    if (isCoachViewer && !item.isRead) {
+                        onMarkAsRead(item.id)
+                    }
+                }
+
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onPrCardClick(item) },
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = Elevated)
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        // Top header: Client or Coach info + Badges
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                item.personalRecord.exerciseName.ifEmpty { "Exercise PR" },
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = PrimaryText
-                            )
-                            PillBadge(
-                                item.personalRecord.recordType.replace("MAX_", "").replace('_', ' ').ifEmpty { "PR" },
-                                isAccent = true
-                            )
-                        }
-
-                        Text(
-                            item.personalRecord.displayFormattedValue,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Accent
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "Coach: ${item.coachName.ifEmpty { "Coach" }}",
-                                fontSize = 12.sp,
-                                color = SecondaryText,
-                                fontWeight = FontWeight.Medium
-                            )
-                            if (item.rating != null && item.rating > 0) {
-                                Text(
-                                    "★".repeat(item.rating),
-                                    fontSize = 14.sp,
-                                    color = Warning
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                CoachAvatar(
+                                    url = if (isCoachViewer) item.clientAvatarUrl else null,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = if (isCoachViewer) {
+                                            item.clientName.ifEmpty { "Athlete" }
+                                        } else {
+                                            stringResource(R.string.loc_coach_named, item.coachName.ifEmpty { stringResource(R.string.loc_coach) })
+                                        },
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = PrimaryText
+                                    )
+                                    if (item.sharedAt.isNotBlank()) {
+                                        Text(
+                                            text = stringResource(R.string.loc_shared_date, item.sharedAt.take(16).replace('T', ' ')),
+                                            fontSize = 11.sp,
+                                            color = SecondaryText
+                                        )
+                                    }
+                                }
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (isCoachViewer && !item.isRead) {
+                                    PillBadge(stringResource(R.string.loc_new_badge), isAccent = true)
+                                }
+                                PillBadge(
+                                    item.personalRecord.recordType.replace("MAX_", "").replace('_', ' ').ifEmpty { "PR" },
+                                    isAccent = true
                                 )
                             }
                         }
 
-                        if (!item.coachFeedback.isNullOrBlank()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Ink, RoundedCornerShape(8.dp))
-                                    .padding(10.dp)
-                            ) {
+                        // Exercise & Value
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    "\"${item.coachFeedback}\"",
-                                    fontSize = 13.sp,
+                                    item.personalRecord.exerciseName.ifEmpty { stringResource(R.string.loc_exercise_pr_fallback) },
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
                                     color = PrimaryText
                                 )
+                                if (item.personalRecord.achievedAt.isNotBlank()) {
+                                    Text(
+                                        stringResource(R.string.loc_achieved_date, item.personalRecord.achievedAt.take(10)),
+                                        fontSize = 12.sp,
+                                        color = SecondaryText
+                                    )
+                                }
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    item.personalRecord.displayFormattedValue,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Accent
+                                )
+                                item.personalRecord.improvementPercentage?.let { pct ->
+                                    if (pct > 0) {
+                                        Text(
+                                            text = stringResource(R.string.loc_improvement_percent, pct.toString()),
+                                            fontSize = 11.sp,
+                                            color = Accent,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
                             }
                         }
 
-                        if (!item.feedbackAt.isNullOrBlank()) {
+                        // Previous record if available
+                        val prevFormatted = item.personalRecord.formattedPrevious
+                            ?: item.personalRecord.previousRecordValue?.let { prev ->
+                                val num = if (prev % 1.0 == 0.0) "${prev.toLong()}" else "$prev"
+                                val u = item.personalRecord.unit ?: ""
+                                if (u.isNotBlank()) "$num $u" else num
+                            }
+                        if (!prevFormatted.isNullOrBlank()) {
                             Text(
-                                "Reviewed on ${item.feedbackAt.take(16)}",
-                                fontSize = 11.sp,
+                                text = "Previous: $prevFormatted",
+                                fontSize = 12.sp,
                                 color = SecondaryText
                             )
+                        }
+
+                        item.personalRecord.notes?.takeIf { it.isNotBlank() }?.let { notes ->
+                            Text(
+                                text = notes,
+                                fontSize = 12.sp,
+                                color = SecondaryText
+                            )
+                        }
+
+                        if (isCoachViewer) {
+                            HorizontalDivider(color = Border.copy(alpha = 0.6f))
+                            // Coach inline rating & feedback editor
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    stringResource(R.string.loc_performance_rating),
+                                    fontSize = 12.sp,
+                                    color = SecondaryText
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    (1..5).forEach { star ->
+                                        val isSelected = star <= selectedRating
+                                        Text(
+                                            text = if (isSelected) "★" else "☆",
+                                            color = if (isSelected) Warning else SecondaryText,
+                                            fontSize = 18.sp,
+                                            modifier = Modifier.clickable { selectedRating = star }
+                                        )
+                                    }
+                                }
+                            }
+
+                            OutlinedTextField(
+                                value = feedbackInput,
+                                onValueChange = { feedbackInput = it },
+                                placeholder = {
+                                    Text(
+                                        stringResource(R.string.loc_leave_coach_feedback),
+                                        fontSize = 12.sp,
+                                        color = SecondaryText
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                maxLines = 3
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (!item.feedbackAt.isNullOrBlank()) {
+                                    Text(
+                                        stringResource(R.string.loc_reviewed_on_date, item.feedbackAt.take(16).replace('T', ' ')),
+                                        fontSize = 11.sp,
+                                        color = SecondaryText
+                                    )
+                                } else {
+                                    Spacer(Modifier.width(1.dp))
+                                }
+                                Button(
+                                    onClick = { onSubmitFeedback(item.id, feedbackInput, selectedRating) },
+                                    enabled = !isSubmitting && feedbackInput.isNotBlank(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink)
+                                ) {
+                                    if (isSubmitting) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            color = Ink,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Text(
+                                            text = if (!item.coachFeedback.isNullOrBlank()) {
+                                                stringResource(R.string.loc_submit_or_update_feedback)
+                                            } else {
+                                                stringResource(R.string.loc_submit_feedback_button)
+                                            },
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            // Client view of shared PR & coach feedback
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (!item.coachFeedback.isNullOrBlank()) "Reviewed by Coach" else "Awaiting Coach Feedback",
+                                    fontSize = 12.sp,
+                                    color = if (!item.coachFeedback.isNullOrBlank()) Accent else SecondaryText,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                if (item.rating != null && item.rating > 0) {
+                                    Text(
+                                        "★".repeat(item.rating),
+                                        fontSize = 14.sp,
+                                        color = Warning
+                                    )
+                                }
+                            }
+
+                            if (!item.coachFeedback.isNullOrBlank()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Ink, RoundedCornerShape(8.dp))
+                                        .padding(10.dp)
+                                ) {
+                                    Text(
+                                        "\"${item.coachFeedback}\"",
+                                        fontSize = 13.sp,
+                                        color = PrimaryText
+                                    )
+                                }
+                            }
+
+                            if (!item.feedbackAt.isNullOrBlank()) {
+                                Text(
+                                    stringResource(R.string.loc_reviewed_on_date, item.feedbackAt.take(16).replace('T', ' ')),
+                                    fontSize = 11.sp,
+                                    color = SecondaryText
+                                )
+                            }
                         }
                     }
                 }

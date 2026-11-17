@@ -1,16 +1,30 @@
 package com.calisthenics.ai.ui.profile
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.annotation.StringRes
+import com.calisthenics.ai.R
+import com.calisthenics.ai.data.local.AccountSession
+import com.calisthenics.ai.data.local.AccountSessionGuard
+import com.calisthenics.ai.data.local.AccountSessionManager
+import com.calisthenics.ai.data.local.GenderSessionStore
+import com.calisthenics.ai.data.remote.api.NetworkErrorParser
 import com.calisthenics.ai.data.remote.dto.ClientProfileRequestDto
 import com.calisthenics.ai.data.remote.dto.CoachProfileRequestDto
 import com.calisthenics.ai.domain.model.ClientProfile
 import com.calisthenics.ai.domain.model.CoachClientRelationship
 import com.calisthenics.ai.domain.model.CoachProfile
+import com.calisthenics.ai.domain.model.Gender
+import com.calisthenics.ai.domain.model.ProfileMediaItem
+import com.calisthenics.ai.domain.model.ProfileType
+import com.calisthenics.ai.domain.model.UserUsage
+import com.calisthenics.ai.domain.repository.AnalysisRepository
 import com.calisthenics.ai.domain.repository.AuthRepository
 import com.calisthenics.ai.domain.repository.ChatRepository
 import com.calisthenics.ai.domain.repository.CoachClientRepository
 import com.calisthenics.ai.domain.repository.ProfileRepository
+import com.calisthenics.ai.ui.media.MediaUploadManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,16 +42,20 @@ data class ClientFormState(
     val displayName: String = "",
     val bio: String = "",
     val experienceLevel: String = "INTERMEDIATE",
+    val gender: Gender? = null,
     val trainingExperience: String = "",
     val primaryGoals: String = "",
     val trainingInterests: String = "",
     val preferredFrequency: String = "",
-    val coachingLanguage: String = ""
+    val coachingLanguage: String = "",
+    val heightCm: String = "",
+    val weightKg: String = ""
 )
 
 data class CoachFormState(
     val displayName: String = "",
     val bio: String = "",
+    val gender: Gender? = null,
     val specialties: String = "",
     val yearsExperience: String = "",
     val trainingPhilosophy: String = "",
@@ -60,15 +78,28 @@ data class ProfileUiState(
     val busyRelationshipIds: Set<Long> = emptySet(),
     val error: String? = null,
     val feedback: String? = null,
+    @StringRes val feedbackResId: Int? = null,
     val isEditingClient: Boolean = false,
     val isEditingCoach: Boolean = false,
+    val isEditingGender: Boolean = false,
+    val isSavingGender: Boolean = false,
+    val genderError: String? = null,
     val clientForm: ClientFormState = ClientFormState(),
     val coachForm: CoachFormState = CoachFormState(),
     val clientFormError: String? = null,
     val coachFormError: String? = null,
     val isUploadingAvatar: Boolean = false,
     val avatarUploadError: String? = null,
-    val avatarUploadSucceeded: Boolean = false
+    val avatarUploadSucceeded: Boolean = false,
+    val athleteMedia: List<ProfileMediaItem> = emptyList(),
+    val coachMedia: List<ProfileMediaItem> = emptyList(),
+    val isMediaLoading: Boolean = false,
+    val isMediaUploading: Boolean = false,
+    val mediaError: String? = null,
+    val userUsage: UserUsage? = null,
+    val isUsageLoading: Boolean = false,
+    val usageError: String? = null,
+    val isUsageOffline: Boolean = false
 )
 
 @HiltViewModel
@@ -76,38 +107,200 @@ class ProfileViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val profileRepository: ProfileRepository,
     private val coachClientRepository: CoachClientRepository,
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
+    private val mediaUploadManager: MediaUploadManager,
+    private val analysisRepository: AnalysisRepository,
+    private val genderSessionStore: GenderSessionStore = GenderSessionStore(),
+    private val accountSessionManager: AccountSessionManager = AccountSessionManager()
 ) : ViewModel() {
+
+    constructor(
+        authRepository: AuthRepository,
+        profileRepository: ProfileRepository,
+        coachClientRepository: CoachClientRepository,
+        chatRepository: ChatRepository,
+        mediaUploadManager: MediaUploadManager,
+        genderSessionStore: GenderSessionStore = GenderSessionStore(),
+        accountSessionManager: AccountSessionManager = AccountSessionManager()
+    ) : this(
+        authRepository = authRepository,
+        profileRepository = profileRepository,
+        coachClientRepository = coachClientRepository,
+        chatRepository = chatRepository,
+        mediaUploadManager = mediaUploadManager,
+        analysisRepository = object : AnalysisRepository {
+            override suspend fun getUserUsage(): Result<UserUsage> = Result.success(UserUsage())
+            override suspend fun uploadVideoForAnalysis(
+                videoFile: java.io.File,
+                exerciseId: Long?,
+                exerciseType: String?,
+                idempotencyKey: String?,
+                sideView: Boolean
+            ): Result<com.calisthenics.ai.domain.model.AnalysisResult> = Result.failure(UnsupportedOperationException())
+            override suspend fun getVideoAnalysisById(id: Long): Result<com.calisthenics.ai.domain.model.AnalysisResult> = Result.failure(UnsupportedOperationException())
+            override suspend fun getVideoAnalysisKeypoints(id: Long): Result<com.calisthenics.ai.domain.model.VideoKeypointsDataModel> = Result.failure(UnsupportedOperationException())
+            override suspend fun getVideoAnalysisQuota(): Result<com.calisthenics.ai.domain.model.QuotaEntitlement> = Result.failure(UnsupportedOperationException())
+            override suspend fun getUserEntitlements(): Result<com.calisthenics.ai.domain.model.QuotaEntitlement> = Result.failure(UnsupportedOperationException())
+            override suspend fun updateMembershipTier(tier: String): Result<com.calisthenics.ai.domain.model.QuotaEntitlement> = Result.failure(UnsupportedOperationException())
+            override suspend fun getVideoAnalysisHistory(): Result<List<com.calisthenics.ai.domain.model.AnalysisResult>> = Result.success(emptyList())
+            override suspend fun analyzeVideo(videoFile: java.io.File, exerciseId: Long?): Result<com.calisthenics.ai.domain.model.AnalysisResult> = Result.failure(UnsupportedOperationException())
+            override suspend fun analyzeImage(imageFile: java.io.File, exerciseId: Long?): Result<com.calisthenics.ai.domain.model.AnalysisResult> = Result.failure(UnsupportedOperationException())
+            override suspend fun getAnalysisHistory(): Result<List<com.calisthenics.ai.domain.model.AnalysisResult>> = Result.success(emptyList())
+            override suspend fun getAnalysisById(id: Long): Result<com.calisthenics.ai.domain.model.AnalysisResult> = Result.failure(UnsupportedOperationException())
+        },
+        genderSessionStore = genderSessionStore,
+        accountSessionManager = accountSessionManager
+    )
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
+    private val sessionGuard = AccountSessionGuard(
+        parentScope = viewModelScope,
+        sessionManager = accountSessionManager,
+        onSessionCleared = {
+            _uiState.value = ProfileUiState()
+            analysisRepository.invalidateUserUsageCache()
+        },
+        onSessionActive = { load() }
+    )
+
     init {
+        sessionGuard.startObserving()
+        viewModelScope.launch {
+            genderSessionStore.state.collect { sessionState ->
+                if (sessionState == null) return@collect
+                _uiState.update { state ->
+                    val activeId = state.clientProfile?.userId
+                        ?: state.coachProfile?.userId
+                        ?: authRepository.getUserId()
+                    if (activeId != null && activeId != sessionState.userId) {
+                        state
+                    } else {
+                        state.copy(
+                            clientProfile = state.clientProfile?.copy(gender = sessionState.gender),
+                            coachProfile = state.coachProfile?.copy(gender = sessionState.gender),
+                            clientForm = if (state.isEditingClient) state.clientForm else state.clientForm.copy(gender = sessionState.gender),
+                            coachForm = if (state.isEditingCoach) state.coachForm else state.coachForm.copy(gender = sessionState.gender)
+                        )
+                    }
+                }
+            }
+        }
+        viewModelScope.launch {
+            profileRepository.profileUpdateEvents.collect { updatedProfile ->
+                _uiState.update { state ->
+                    val activeId = state.clientProfile?.userId ?: authRepository.getUserId()
+                    if (activeId != null && activeId != updatedProfile.userId) {
+                        state
+                    } else {
+                        state.copy(
+                            clientProfile = updatedProfile,
+                            clientForm = if (state.isEditingClient) state.clientForm else ClientFormState(
+                                displayName = updatedProfile.displayName,
+                                bio = updatedProfile.bio.orEmpty(),
+                                experienceLevel = updatedProfile.experienceLevel ?: "INTERMEDIATE",
+                                gender = updatedProfile.gender,
+                                trainingExperience = updatedProfile.trainingExperience.orEmpty(),
+                                primaryGoals = updatedProfile.primaryGoals.orEmpty(),
+                                trainingInterests = updatedProfile.trainingInterests.orEmpty(),
+                                preferredFrequency = updatedProfile.preferredFrequency.orEmpty(),
+                                coachingLanguage = updatedProfile.coachingLanguage.orEmpty(),
+                                heightCm = updatedProfile.heightCm?.toString().orEmpty(),
+                                weightKg = updatedProfile.weightKg?.toString().orEmpty()
+                            )
+                        )
+                    }
+                }
+            }
+        }
+        viewModelScope.launch {
+            analysisRepository.usageUpdateEvents.collect { updatedUsage ->
+                if (updatedUsage == null) {
+                    loadUserUsage(forceRefresh = true)
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            userUsage = updatedUsage,
+                            isUsageLoading = false,
+                            usageError = null,
+                            isUsageOffline = false
+                        )
+                    }
+                }
+            }
+        }
         load()
     }
 
     fun selectTab(tab: ProfileTab) {
-        _uiState.update { it.copy(activeTab = tab, feedback = null, error = null) }
+        _uiState.update { it.copy(activeTab = tab, feedback = null, feedbackResId = null, error = null) }
         if (tab == ProfileTab.COACH && _uiState.value.coachProfile == null) {
             loadCoachProfile()
         }
     }
 
     fun load() {
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             _uiState.update { it.copy(isLoading = true, error = null, feedback = null) }
-            loadClientProfileInternal()
-            loadCoachProfileInternal()
-            loadActiveClientsInternal()
-            _uiState.update { it.copy(isLoading = false) }
+            loadClientProfileInternal(captured)
+            if (!sessionGuard.isCurrentSession(captured)) return@launchScoped
+            loadCoachProfileInternal(captured)
+            if (!sessionGuard.isCurrentSession(captured)) return@launchScoped
+            loadActiveClientsInternal(captured)
+            if (sessionGuard.isCurrentSession(captured)) {
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+        loadUserUsage()
+    }
+
+    fun loadUserUsage(forceRefresh: Boolean = false) {
+        sessionGuard.launchScoped { captured ->
+            _uiState.update { it.copy(isUsageLoading = true, usageError = null) }
+            val result = analysisRepository.getUserUsage()
+            if (!sessionGuard.isCurrentSession(captured)) return@launchScoped
+
+            result.fold(
+                onSuccess = { usage ->
+                    _uiState.update {
+                        it.copy(
+                            userUsage = usage,
+                            isUsageLoading = false,
+                            usageError = null,
+                            isUsageOffline = false
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { current ->
+                        val cached = current.userUsage ?: analysisRepository.getCachedUserUsage()
+                        if (cached != null) {
+                            current.copy(
+                                userUsage = cached,
+                                isUsageLoading = false,
+                                isUsageOffline = true,
+                                usageError = null
+                            )
+                        } else {
+                            current.copy(
+                                isUsageLoading = false,
+                                isUsageOffline = false,
+                                usageError = error.message ?: "Failed to load usage"
+                            )
+                        }
+                    }
+                }
+            )
         }
     }
 
-    private suspend fun loadClientProfileInternal() {
+    private suspend fun loadClientProfileInternal(captured: AccountSession = sessionGuard.currentSession()) {
         profileRepository.getMyClientProfile()
             .onSuccess { profile ->
+                if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
                 authRepository.updateAccountProfile(
-                    userId = profile.id,
+                    userId = profile.userId,
                     fullName = profile.displayName.ifBlank { profile.fullName },
                     avatarUrl = profile.avatarUrl
                 )
@@ -118,25 +311,31 @@ class ProfileViewModel @Inject constructor(
                             displayName = profile.displayName,
                             bio = profile.bio.orEmpty(),
                             experienceLevel = profile.experienceLevel ?: "INTERMEDIATE",
+                            gender = profile.gender,
                             trainingExperience = profile.trainingExperience.orEmpty(),
                             primaryGoals = profile.primaryGoals.orEmpty(),
                             trainingInterests = profile.trainingInterests.orEmpty(),
                             preferredFrequency = profile.preferredFrequency.orEmpty(),
-                            coachingLanguage = profile.coachingLanguage.orEmpty()
+                            coachingLanguage = profile.coachingLanguage.orEmpty(),
+                            heightCm = profile.heightCm?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() }.orEmpty(),
+                            weightKg = profile.weightKg?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() }.orEmpty()
                         )
                     )
                 }
+                loadAthleteMediaInternal(profile.userId, captured)
             }
             .onFailure { throwable ->
+                if (!sessionGuard.isCurrentSession(captured)) return@onFailure
                 _uiState.update { it.copy(error = throwable.localizedMessage ?: "Could not load client profile") }
             }
     }
 
-    private suspend fun loadCoachProfileInternal() {
+    private suspend fun loadCoachProfileInternal(captured: AccountSession = sessionGuard.currentSession()) {
         profileRepository.getMyCoachProfile()
             .onSuccess { profile ->
+                if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
                 authRepository.updateAccountProfile(
-                    userId = profile.id,
+                    userId = profile.userId,
                     fullName = profile.displayName.ifBlank { profile.fullName },
                     avatarUrl = profile.avatarUrl
                 )
@@ -146,6 +345,7 @@ class ProfileViewModel @Inject constructor(
                         coachForm = CoachFormState(
                             displayName = profile.displayName,
                             bio = profile.bio.orEmpty(),
+                            gender = profile.gender,
                             specialties = profile.specialties.orEmpty(),
                             yearsExperience = profile.yearsExperience?.toString().orEmpty(),
                             trainingPhilosophy = profile.trainingPhilosophy.orEmpty(),
@@ -158,20 +358,125 @@ class ProfileViewModel @Inject constructor(
                         )
                     )
                 }
+                loadCoachMediaInternal(profile.userId, captured)
             }
             .onFailure {
                 // If coach profile fails or not set up, keep coachProfile null or state quiet
             }
     }
 
-    private suspend fun loadActiveClientsInternal() {
+    private suspend fun loadActiveClientsInternal(captured: AccountSession = sessionGuard.currentSession()) {
         coachClientRepository.loadOverview()
             .onSuccess { overview ->
+                if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
                 val clients = overview.relationships.filter {
                     it.status == "ACTIVE" && it.coachId == overview.currentUserId
                 }
                 _uiState.update { it.copy(activeClients = clients) }
             }
+    }
+
+    private suspend fun loadAthleteMediaInternal(userId: Long, captured: AccountSession = sessionGuard.currentSession()) {
+        profileRepository.getProfileMedia(userId, ProfileType.ATHLETE)
+            .onSuccess { list ->
+                if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
+                _uiState.update { it.copy(athleteMedia = list) }
+            }
+    }
+
+    private suspend fun loadCoachMediaInternal(userId: Long, captured: AccountSession = sessionGuard.currentSession()) {
+        profileRepository.getProfileMedia(userId, ProfileType.COACH)
+            .onSuccess { list ->
+                if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
+                _uiState.update { it.copy(coachMedia = list) }
+            }
+    }
+
+    fun loadMedia(profileType: ProfileType) {
+        val userId = when (profileType) {
+            ProfileType.ATHLETE -> _uiState.value.clientProfile?.userId
+            ProfileType.COACH -> _uiState.value.coachProfile?.userId
+        } ?: return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isMediaLoading = true) }
+            profileRepository.getProfileMedia(userId, profileType)
+                .onSuccess { list ->
+                    _uiState.update { state ->
+                        if (profileType == ProfileType.ATHLETE) {
+                            state.copy(athleteMedia = list, isMediaLoading = false)
+                        } else {
+                            state.copy(coachMedia = list, isMediaLoading = false)
+                        }
+                    }
+                }
+                .onFailure { t ->
+                    _uiState.update { it.copy(isMediaLoading = false, mediaError = t.localizedMessage) }
+                }
+        }
+    }
+
+    fun uploadMedia(uris: List<Uri>, profileType: ProfileType) {
+        if (uris.isEmpty()) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isMediaUploading = true, mediaError = null) }
+            for (uri in uris) {
+                mediaUploadManager.uploadProfileMedia(uri, profileType)
+                    .onFailure { t ->
+                        _uiState.update { it.copy(mediaError = t.localizedMessage) }
+                    }
+            }
+            loadMedia(profileType)
+            _uiState.update { it.copy(isMediaUploading = false) }
+        }
+    }
+
+    fun deleteMedia(mediaId: Long, profileType: ProfileType) {
+        viewModelScope.launch {
+            profileRepository.deleteProfileMedia(mediaId)
+                .onSuccess {
+                    loadMedia(profileType)
+                }
+                .onFailure { t ->
+                    _uiState.update { it.copy(mediaError = t.localizedMessage) }
+                }
+        }
+    }
+
+    fun reorderMedia(mediaIds: List<Long>, profileType: ProfileType) {
+        viewModelScope.launch {
+            profileRepository.reorderProfileMedia(profileType, mediaIds)
+                .onSuccess { list ->
+                    _uiState.update { state ->
+                        if (profileType == ProfileType.ATHLETE) {
+                            state.copy(athleteMedia = list)
+                        } else {
+                            state.copy(coachMedia = list)
+                        }
+                    }
+                }
+                .onFailure { t ->
+                    _uiState.update { it.copy(mediaError = t.localizedMessage) }
+                }
+        }
+    }
+
+    fun setPrimaryCover(mediaId: Long, profileType: ProfileType) {
+        viewModelScope.launch {
+            profileRepository.setProfileMediaCover(mediaId)
+                .onSuccess { list ->
+                    _uiState.update { state ->
+                        if (profileType == ProfileType.ATHLETE) {
+                            state.copy(athleteMedia = list)
+                        } else {
+                            state.copy(coachMedia = list)
+                        }
+                    }
+                }
+                .onFailure { t ->
+                    _uiState.update { it.copy(mediaError = t.localizedMessage) }
+                }
+        }
     }
 
     fun loadCoachProfile() {
@@ -222,11 +527,14 @@ class ProfileViewModel @Inject constructor(
                         displayName = current.displayName,
                         bio = current.bio.orEmpty(),
                         experienceLevel = current.experienceLevel ?: "INTERMEDIATE",
+                        gender = current.gender,
                         trainingExperience = current.trainingExperience.orEmpty(),
                         primaryGoals = current.primaryGoals.orEmpty(),
                         trainingInterests = current.trainingInterests.orEmpty(),
                         preferredFrequency = current.preferredFrequency.orEmpty(),
-                        coachingLanguage = current.coachingLanguage.orEmpty()
+                        coachingLanguage = current.coachingLanguage.orEmpty(),
+                        heightCm = current.heightCm?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() }.orEmpty(),
+                        weightKg = current.weightKg?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() }.orEmpty()
                     )
                 } else it.clientForm
             )
@@ -252,6 +560,18 @@ class ProfileViewModel @Inject constructor(
             return
         }
 
+        val heightVal = form.heightCm.trim().toDoubleOrNull()
+        if (form.heightCm.isNotBlank() && (heightVal == null || heightVal < 50.0 || heightVal > 300.0)) {
+            _uiState.update { it.copy(clientFormError = "Height must be between 50 and 300 cm") }
+            return
+        }
+
+        val weightVal = form.weightKg.trim().toDoubleOrNull()
+        if (form.weightKg.isNotBlank() && (weightVal == null || weightVal < 20.0 || weightVal > 500.0)) {
+            _uiState.update { it.copy(clientFormError = "Weight must be between 20 and 500 kg") }
+            return
+        }
+
         if (_uiState.value.isSaving) return
 
         viewModelScope.launch {
@@ -264,7 +584,10 @@ class ProfileViewModel @Inject constructor(
                 primaryGoals = form.primaryGoals.ifBlank { null },
                 trainingInterests = form.trainingInterests.ifBlank { null },
                 preferredFrequency = form.preferredFrequency.ifBlank { null },
-                coachingLanguage = form.coachingLanguage.ifBlank { null }
+                coachingLanguage = form.coachingLanguage.ifBlank { null },
+                heightCm = heightVal,
+                weightKg = weightVal,
+                gender = form.gender?.apiValue
             )
 
             profileRepository.updateMyClientProfile(request)
@@ -274,7 +597,10 @@ class ProfileViewModel @Inject constructor(
                             isSaving = false,
                             isEditingClient = false,
                             clientProfile = updated,
-                            feedback = "Client profile updated successfully."
+                            coachProfile = it.coachProfile?.copy(gender = updated.gender),
+                            coachForm = it.coachForm.copy(gender = updated.gender),
+                            feedback = "Client profile updated successfully.",
+                            feedbackResId = null
                         )
                     }
                 }
@@ -300,6 +626,7 @@ class ProfileViewModel @Inject constructor(
                     CoachFormState(
                         displayName = current.displayName,
                         bio = current.bio.orEmpty(),
+                        gender = current.gender,
                         specialties = current.specialties.orEmpty(),
                         yearsExperience = current.yearsExperience?.toString().orEmpty(),
                         trainingPhilosophy = current.trainingPhilosophy.orEmpty(),
@@ -355,7 +682,8 @@ class ProfileViewModel @Inject constructor(
                 certifications = form.certifications.ifBlank { null },
                 socialLinks = form.socialLinks.ifBlank { null },
                 isPublic = form.isPublic,
-                isAcceptingClients = form.isAcceptingClients
+                isAcceptingClients = form.isAcceptingClients,
+                gender = form.gender?.apiValue
             )
 
             profileRepository.updateMyCoachProfile(request)
@@ -365,7 +693,10 @@ class ProfileViewModel @Inject constructor(
                             isSaving = false,
                             isEditingCoach = false,
                             coachProfile = updated,
-                            feedback = "Coach profile updated successfully."
+                            clientProfile = it.clientProfile?.copy(gender = updated.gender),
+                            clientForm = it.clientForm.copy(gender = updated.gender),
+                            feedback = "Coach profile updated successfully.",
+                            feedbackResId = null
                         )
                     }
                 }
@@ -380,8 +711,49 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    fun startEditingGender() {
+        _uiState.update { it.copy(isEditingGender = true, genderError = null) }
+    }
+
+    fun cancelEditingGender() {
+        if (_uiState.value.isSavingGender) return
+        _uiState.update { it.copy(isEditingGender = false, genderError = null) }
+    }
+
+    fun saveGender(gender: Gender) {
+        if (_uiState.value.isSavingGender) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingGender = true, genderError = null, feedback = null, feedbackResId = null) }
+            authRepository.updateGender(gender)
+                .onSuccess { updated ->
+                    val confirmedGender = updated.gender ?: gender
+                    _uiState.update { state ->
+                        state.copy(
+                            isSavingGender = false,
+                            isEditingGender = false,
+                            genderError = null,
+                            clientProfile = state.clientProfile?.copy(gender = confirmedGender),
+                            coachProfile = state.coachProfile?.copy(gender = confirmedGender),
+                            clientForm = state.clientForm.copy(gender = confirmedGender),
+                            coachForm = state.coachForm.copy(gender = confirmedGender),
+                            feedback = null,
+                            feedbackResId = R.string.gender_updated_success
+                        )
+                    }
+                }
+                .onFailure { throwable ->
+                    _uiState.update {
+                        it.copy(
+                            isSavingGender = false,
+                            genderError = NetworkErrorParser.toUserMessage(throwable)
+                        )
+                    }
+                }
+        }
+    }
+
     fun clearFeedback() {
-        _uiState.update { it.copy(feedback = null) }
+        _uiState.update { it.copy(feedback = null, feedbackResId = null) }
     }
 
     fun clearAvatarUploadState() {
@@ -470,9 +842,16 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    fun logout() = authRepository.clearAuth()
+    fun logout() {
+        sessionGuard.cancelActiveSessionWork()
+        chatRepository.disconnectWebSocket()
+        authRepository.clearAuth()
+        _uiState.value = ProfileUiState()
+    }
 
     fun switchAccount() {
+        sessionGuard.cancelActiveSessionWork()
+        chatRepository.disconnectWebSocket()
         authRepository.deactivateActiveSession()
         _uiState.value = ProfileUiState()
     }

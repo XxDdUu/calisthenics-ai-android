@@ -2,6 +2,7 @@ package com.calisthenics.ai.data.remote.datasource
 
 import com.calisthenics.ai.data.remote.api.CalisthenicsApi
 import com.calisthenics.ai.data.remote.dto.AuthResponseDto
+import com.calisthenics.ai.data.remote.dto.FirebaseLoginRequestDto
 import com.calisthenics.ai.data.remote.dto.ForgotPasswordRequestDto
 import com.calisthenics.ai.data.remote.dto.ForgotPasswordResponseDto
 import com.calisthenics.ai.data.remote.dto.GoogleLoginRequestDto
@@ -12,6 +13,8 @@ import com.calisthenics.ai.data.remote.dto.RegisterRequestDto
 import com.calisthenics.ai.data.remote.dto.RegisterInitiationResponseDto
 import com.calisthenics.ai.data.remote.dto.VerifyRegistrationOtpRequestDto
 import com.calisthenics.ai.data.remote.dto.ResendRegistrationOtpRequestDto
+import com.calisthenics.ai.data.remote.dto.UpdateGenderRequestDto
+import com.calisthenics.ai.data.remote.dto.UpdateOnboardingStatusRequestDto
 import com.calisthenics.ai.data.remote.dto.UserProfileResponseDto
 import com.calisthenics.ai.data.remote.dto.VerifyOtpRequestDto
 import com.calisthenics.ai.data.remote.dto.VerifyOtpResponseDto
@@ -26,6 +29,10 @@ class RemoteAuthDataSource @Inject constructor(
 
     suspend fun authenticateWithGoogle(idToken: String): AuthResponseDto {
         return api.authenticateWithGoogle(GoogleLoginRequestDto(idToken))
+    }
+
+    suspend fun authenticateWithFirebase(idToken: String): AuthResponseDto {
+        return api.authenticateWithFirebase(FirebaseLoginRequestDto(idToken))
     }
 
     suspend fun register(registerRequest: RegisterRequestDto): RegisterInitiationResponseDto {
@@ -64,5 +71,13 @@ class RemoteAuthDataSource @Inject constructor(
 
     suspend fun getCurrentUser(): UserProfileResponseDto {
         return api.getCurrentUser()
+    }
+
+    suspend fun updateGender(gender: String): UserProfileResponseDto {
+        return api.updateCurrentUserGender(UpdateGenderRequestDto(gender))
+    }
+
+    suspend fun updateOnboardingStatus(status: String): UserProfileResponseDto {
+        return api.updateCurrentUserOnboardingStatus(UpdateOnboardingStatusRequestDto(status))
     }
 }

@@ -8,7 +8,48 @@ data class WorkoutPlanResponseDto(
     @SerializedName("splitType") val splitType: String,
     @SerializedName("createdAt") val createdAt: String? = null,
     @SerializedName("updatedAt") val updatedAt: String? = null,
-    @SerializedName("days") val days: List<WorkoutPlanDayResponseDto>? = null
+    @SerializedName("days") val days: List<WorkoutPlanDayResponseDto>? = null,
+    @SerializedName("isActive") val isActive: Boolean = false,
+    @SerializedName("startDate") val startDate: String? = null
+)
+
+data class CreateWorkoutPlanAssignmentRequestDto(
+    @SerializedName("workoutPlanId") val workoutPlanId: Long,
+    @SerializedName("startDate") val startDate: String? = null,
+    @SerializedName("endDate") val endDate: String? = null,
+    @SerializedName("notes") val notes: String? = null
+)
+
+data class WorkoutPlanAssignmentResponseDto(
+    @SerializedName("id") val id: Long,
+    @SerializedName("status") val status: String,
+    @SerializedName("workoutPlanId") val workoutPlanId: Long? = null,
+    @SerializedName("clientId") val clientId: Long? = null,
+    @SerializedName("athleteId") val athleteId: Long? = null,
+    @SerializedName("coachId") val coachId: Long? = null,
+    @SerializedName("updatedAt") val updatedAt: String? = null,
+    @SerializedName("workoutPlan") val workoutPlan: WorkoutPlanResponseDto? = null
+)
+
+data class WorkoutPlanAssignmentDto(
+    @SerializedName("id") val id: Long,
+    @SerializedName("relationshipId") val relationshipId: Long? = null,
+    @SerializedName("workoutPlanId") val workoutPlanId: Long? = null,
+    @SerializedName("coachId") val coachId: Long? = null,
+    @SerializedName("coachName") val coachName: String?,
+    @SerializedName("clientId") val clientId: Long? = null,
+    @SerializedName("athleteId") val athleteId: Long? = null,
+    @SerializedName("clientName") val clientName: String? = null,
+    @SerializedName("status") val status: String? = "ACTIVE",
+    @SerializedName("startDate") val startDate: String?,
+    @SerializedName("endDate") val endDate: String? = null,
+    @SerializedName("createdAt") val createdAt: String?,
+    @SerializedName("updatedAt") val updatedAt: String? = null,
+    @SerializedName("workoutPlan") val workoutPlan: WorkoutPlanResponseDto
+)
+
+data class UpdateWorkoutPlanAssignmentStatusRequestDto(
+    @SerializedName("status") val status: String
 )
 
 data class WorkoutPlanDayResponseDto(

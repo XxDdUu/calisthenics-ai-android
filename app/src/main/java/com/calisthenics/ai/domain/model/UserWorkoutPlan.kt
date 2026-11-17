@@ -67,13 +67,26 @@ data class UserWorkoutPlan(
     val splitType: WorkoutSplitType,
     val createdAt: String? = null,
     val updatedAt: String? = null,
-    val days: List<UserWorkoutPlanDay> = emptyList()
+    val days: List<UserWorkoutPlanDay> = emptyList(),
+    val isActive: Boolean = false,
+    val startDate: String? = null
 ) {
     val trainingDayCount: Int
-        get() = days.count { !it.sessionType.isRest }
+        get() = days
+            .distinctBy { it.dayOfWeek }
+            .count { !it.isRestDay && !it.sessionType.isRest }
+            .coerceIn(0, 7)
+
+    val restDayCount: Int
+        get() = days
+            .distinctBy { it.dayOfWeek }
+            .count { it.isRestDay || it.sessionType.isRest }
+            .coerceIn(0, 7)
 
     val totalExerciseCount: Int
-        get() = days.sumOf { it.exercises.size }
+        get() = days
+            .distinctBy { it.dayOfWeek }
+            .sumOf { it.exercises.size }
 }
 
 data class UserWorkoutPlanDay(

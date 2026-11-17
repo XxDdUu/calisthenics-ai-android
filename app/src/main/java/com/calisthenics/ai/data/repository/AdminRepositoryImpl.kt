@@ -1,15 +1,30 @@
 package com.calisthenics.ai.data.repository
 
 import com.calisthenics.ai.data.mapper.toDomain
+import com.calisthenics.ai.data.mapper.toDto
 import com.calisthenics.ai.data.remote.datasource.RemoteAdminDataSource
 import com.calisthenics.ai.data.remote.dto.CreateAdminExerciseRequestDto
 import com.calisthenics.ai.data.remote.dto.ExerciseMediaItemRequestDto
 import com.calisthenics.ai.data.remote.dto.UpdateAdminExerciseRequestDto
+import com.calisthenics.ai.domain.model.AdminAiChatResponse
+import com.calisthenics.ai.domain.model.AdminConfirmationDecision
+import com.calisthenics.ai.domain.model.AdminAiConversationSummary
+import com.calisthenics.ai.domain.model.AdminAiMessage
+import com.calisthenics.ai.domain.model.AdminAiRecommendation
+import com.calisthenics.ai.domain.model.AdminCoachClientStatistics
 import com.calisthenics.ai.domain.model.AdminDashboard
 import com.calisthenics.ai.domain.model.AdminExercise
 import com.calisthenics.ai.domain.model.AdminExerciseDeleteResult
+import com.calisthenics.ai.domain.model.AdminGlobalUserStatistics
+import com.calisthenics.ai.domain.model.AdminGlobalUserSummary
 import com.calisthenics.ai.domain.model.AdminPage
+import com.calisthenics.ai.domain.model.AdminPlatformEngagement
+import com.calisthenics.ai.domain.model.AdminPlatformOverview
+import com.calisthenics.ai.domain.model.AdminTrainingAnalytics
 import com.calisthenics.ai.domain.model.AdminUser
+import com.calisthenics.ai.domain.model.AdminUserDetailDossier
+import com.calisthenics.ai.domain.model.AdminUserSegmentFilter
+import com.calisthenics.ai.domain.model.AdminUserSegments
 import com.calisthenics.ai.domain.model.AdminWorkoutPlan
 import com.calisthenics.ai.domain.model.AdminWorkoutPlanDetail
 import com.calisthenics.ai.domain.model.AdminWorkoutSession
@@ -45,6 +60,14 @@ class AdminRepositoryImpl @Inject constructor(
 
     override suspend fun updateUserRole(userId: Long, role: String): Result<AdminUser> = runCatching {
         remoteDataSource.updateUserRole(userId, role).toDomain()
+    }
+
+    override suspend fun grantAdminPro(userId: Long, reason: String?): Result<AdminUser> = runCatching {
+        remoteDataSource.grantAdminPro(userId, reason).toDomain()
+    }
+
+    override suspend fun revokeAdminPro(userId: Long, reason: String?): Result<AdminUser> = runCatching {
+        remoteDataSource.revokeAdminPro(userId, reason).toDomain()
     }
 
     override suspend fun getWorkoutPlans(page: Int, size: Int): Result<AdminPage<AdminWorkoutPlan>> = runCatching {
@@ -156,6 +179,90 @@ class AdminRepositoryImpl @Inject constructor(
         remoteDataSource.deleteExercise(exerciseId, softDelete).toDomain()
     }
 
+    override suspend fun sendAdminAiChat(
+        conversationId: Long?,
+        message: String,
+        range: String,
+        startDate: String?,
+        endDate: String?
+    ): Result<AdminAiChatResponse> = runCatching {
+        remoteDataSource.sendAdminAiChat(conversationId, message, range, startDate, endDate).toDomain()
+    }
+
+    override suspend fun resolveAdminAiConfirmation(
+        confirmationToken: String,
+        approved: Boolean,
+        conversationId: Long?
+    ): Result<AdminConfirmationDecision> = runCatching {
+        remoteDataSource.resolveAdminAiConfirmation(confirmationToken, approved, conversationId).toDomain()
+    }
+
+    override suspend fun getAdminAiConversations(): Result<List<AdminAiConversationSummary>> = runCatching {
+        remoteDataSource.getAdminAiConversations().map { it.toDomain() }
+    }
+
+    override suspend fun createAdminAiConversation(title: String?): Result<AdminAiConversationSummary> = runCatching {
+        remoteDataSource.createAdminAiConversation(title).toDomain()
+    }
+
+    override suspend fun getAdminAiConversationMessages(conversationId: Long): Result<List<AdminAiMessage>> = runCatching {
+        remoteDataSource.getAdminAiConversationMessages(conversationId).map { it.toDomain() }
+    }
+
+    override suspend fun getAdminAiPlatformOverview(
+        range: String,
+        startDate: String?,
+        endDate: String?
+    ): Result<AdminPlatformOverview> = runCatching {
+        remoteDataSource.getAdminAiPlatformOverview(range, startDate, endDate).toDomain()
+    }
+
+    override suspend fun getAdminAiTrainingAnalytics(
+        range: String,
+        startDate: String?,
+        endDate: String?
+    ): Result<AdminTrainingAnalytics> = runCatching {
+        remoteDataSource.getAdminAiTrainingAnalytics(range, startDate, endDate).toDomain()
+    }
+
+    override suspend fun getAdminAiRecommendations(
+        type: String?,
+        status: String?
+    ): Result<List<AdminAiRecommendation>> = runCatching {
+        remoteDataSource.getAdminAiRecommendations(type, status).map { it.toDomain() }
+    }
+
+    override suspend fun createAdminAiRecommendations(
+        type: String,
+        targetSkill: String?,
+        trainingLevel: String?,
+        prompt: String?
+    ): Result<List<AdminAiRecommendation>> = runCatching {
+        remoteDataSource.createAdminAiRecommendations(type, targetSkill, trainingLevel, prompt).map { it.toDomain() }
+    }
+
+    override suspend fun approveAdminAiRecommendation(
+        id: Long,
+        reviewNotes: String?,
+        publishExercise: Boolean?
+    ): Result<AdminAiRecommendation> = runCatching {
+        remoteDataSource.approveAdminAiRecommendation(id, reviewNotes, publishExercise).toDomain()
+    }
+
+    override suspend fun rejectAdminAiRecommendation(
+        id: Long,
+        reviewNotes: String?
+    ): Result<AdminAiRecommendation> = runCatching {
+        remoteDataSource.rejectAdminAiRecommendation(id, reviewNotes).toDomain()
+    }
+
+    override suspend fun implementAdminAiRecommendation(
+        id: Long,
+        reviewNotes: String?
+    ): Result<AdminAiRecommendation> = runCatching {
+        remoteDataSource.implementAdminAiRecommendation(id, reviewNotes).toDomain()
+    }
+
     private fun List<ExerciseMedia>.toRequestDtos() = map {
         ExerciseMediaItemRequestDto(
             type = it.type.name,
@@ -163,5 +270,83 @@ class AdminRepositoryImpl @Inject constructor(
             thumbnailUrl = it.thumbnailUrl,
             displayOrder = it.displayOrder
         )
+    }
+
+    override suspend fun getGlobalUserStatistics(
+        range: String,
+        startDate: String?,
+        endDate: String?
+    ): Result<AdminGlobalUserStatistics> = runCatching {
+        remoteDataSource.getGlobalUserStatistics(range, startDate, endDate).toDomain()
+    }
+
+    override suspend fun getGlobalUsers(
+        page: Int,
+        size: Int,
+        search: String?,
+        experienceLevel: String?,
+        fitnessGoal: String?,
+        activityStatus: String?,
+        inactiveDaysThreshold: Int?,
+        maxCompletionRate: Double?,
+        coachRelationshipStatus: String?,
+        roleFilter: String?,
+        skillKeyword: String?,
+        includeEmail: Boolean,
+        sortBy: String?,
+        range: String,
+        startDate: String?,
+        endDate: String?
+    ): Result<AdminPage<AdminGlobalUserSummary>> = runCatching {
+        remoteDataSource.getGlobalUsers(
+            page = page,
+            size = size,
+            search = search,
+            experienceLevel = experienceLevel,
+            fitnessGoal = fitnessGoal,
+            activityStatus = activityStatus,
+            inactiveDaysThreshold = inactiveDaysThreshold,
+            maxCompletionRate = maxCompletionRate,
+            coachRelationshipStatus = coachRelationshipStatus,
+            roleFilter = roleFilter,
+            skillKeyword = skillKeyword,
+            includeEmail = includeEmail,
+            sortBy = sortBy,
+            range = range,
+            startDate = startDate,
+            endDate = endDate
+        ).toDomain { it.toDomain() }
+    }
+
+    override suspend fun getGlobalUserDetail(
+        userId: Long,
+        includeEmail: Boolean,
+        range: String,
+        startDate: String?,
+        endDate: String?
+    ): Result<AdminUserDetailDossier> = runCatching {
+        remoteDataSource.getGlobalUserDetail(userId, includeEmail, range, startDate, endDate).toDomain()
+    }
+
+    override suspend fun getCoachClientStatistics(
+        range: String,
+        startDate: String?,
+        endDate: String?
+    ): Result<AdminCoachClientStatistics> = runCatching {
+        remoteDataSource.getCoachClientStatistics(range, startDate, endDate).toDomain()
+    }
+
+    override suspend fun getPlatformEngagement(
+        range: String,
+        startDate: String?,
+        endDate: String?
+    ): Result<AdminPlatformEngagement> = runCatching {
+        remoteDataSource.getPlatformEngagement(range, startDate, endDate).toDomain()
+    }
+
+    override suspend fun analyzeUserSegments(
+        filter: AdminUserSegmentFilter
+    ): Result<AdminUserSegments> = runCatching {
+        remoteDataSource.analyzeUserSegments(filter.toDto()).toDomain()
     }
 }

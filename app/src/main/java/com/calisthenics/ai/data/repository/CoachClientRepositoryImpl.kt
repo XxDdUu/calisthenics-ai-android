@@ -7,11 +7,22 @@ import com.calisthenics.ai.domain.model.CoachClientRelationship
 import com.calisthenics.ai.domain.model.CoachConnectionOverview
 import com.calisthenics.ai.domain.model.CoachProfile
 import com.calisthenics.ai.domain.repository.CoachClientRepository
+import com.calisthenics.ai.domain.repository.WorkoutPlanRepository
 import javax.inject.Inject
 
-class CoachClientRepositoryImpl @Inject constructor(
-    private val api: CalisthenicsApi
+class CoachClientRepositoryImpl private constructor(
+    private val api: CalisthenicsApi,
+    private val workoutPlanRepository: WorkoutPlanRepository?,
+    @Suppress("UNUSED_PARAMETER") unused: Boolean
 ) : CoachClientRepository {
+
+    @Inject
+    constructor(
+        api: CalisthenicsApi,
+        workoutPlanRepository: WorkoutPlanRepository
+    ) : this(api, workoutPlanRepository, false)
+
+    constructor(api: CalisthenicsApi) : this(api, null, false)
 
     override suspend fun loadOverview(): Result<CoachConnectionOverview> = runCatching {
         val currentUserId = api.getCurrentUser().id
@@ -45,10 +56,14 @@ class CoachClientRepositoryImpl @Inject constructor(
     }
 
     override suspend fun cancelRequest(relationshipId: Long): Result<CoachClientRelationship> = runCatching {
-        api.cancelCoachConnection(relationshipId).toDomain()
+        val cancelled = api.cancelCoachConnection(relationshipId).toDomain()
+        workoutPlanRepository?.invalidateCoachAssignedPlans()
+        cancelled
     }
 
     override suspend fun terminateRelationship(relationshipId: Long): Result<CoachClientRelationship> = runCatching {
-        api.terminateCoachConnection(relationshipId).toDomain()
+        val terminated = api.terminateCoachConnection(relationshipId).toDomain()
+        workoutPlanRepository?.invalidateCoachAssignedPlans()
+        terminated
     }
 }

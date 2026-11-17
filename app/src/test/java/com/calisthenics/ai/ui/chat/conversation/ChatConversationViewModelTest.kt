@@ -260,6 +260,59 @@ class ChatConversationViewModelTest {
         assertEquals(10L, state.messages[1].id)
     }
 
+    @Test
+    fun incomingPrShareMessagePreservesStructuredSharedPrAttachment() = runTest {
+        val viewModel = createViewModel(conversationId = 10L)
+        advanceUntilIdle()
+
+        val sharedPrDto = com.calisthenics.ai.data.remote.dto.SharedPersonalRecordDto(
+            id = 88L,
+            personalRecord = com.calisthenics.ai.data.remote.dto.PersonalRecordDto(
+                id = 500L,
+                exerciseName = "Weighted Pull-up",
+                recordType = "MAX_WEIGHT",
+                recordValue = 45.0,
+                previousRecordValue = 40.0,
+                improvementPercentage = 12.5,
+                unit = "kg",
+                achievedAt = "2026-11-12T08:00:00Z"
+            ),
+            clientUserId = 1L,
+            clientName = "Athlete One",
+            coachUserId = 2L,
+            coachName = "Coach Alex",
+            sharedAt = "2026-11-12T08:05:00Z"
+        )
+
+        val prShareMessage = ChatMessage(
+            id = 99L,
+            conversationId = 10L,
+            senderId = 1L,
+            senderName = "Athlete One",
+            senderAvatarUrl = null,
+            content = "{\"id\":88}",
+            messageType = "PR_SHARE",
+            createdAt = "2026-11-12T08:05:00Z",
+            isFromCurrentUser = true,
+            clientMessageId = "pr-share-88",
+            sharedPr = sharedPrDto
+        )
+
+        fakeRepository.emitIncomingMessage(prShareMessage)
+        advanceUntilIdle()
+
+        // Duplicate WebSocket delivery with same clientMessageId should deduplicate cleanly
+        fakeRepository.emitIncomingMessage(prShareMessage)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(1, state.messages.size)
+        val received = state.messages.single()
+        assertEquals("PR_SHARE", received.messageType)
+        assertEquals("Weighted Pull-up", received.sharedPr?.personalRecord?.exerciseName)
+        assertEquals(45.0, received.sharedPr?.personalRecord?.recordValue ?: 0.0, 0.001)
+    }
+
     private class FakeChatRepository : ChatRepository {
         var markAsReadCalls = 0
         var sendShouldFail = false

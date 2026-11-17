@@ -622,4 +622,193 @@ class WorkoutSessionViewModelTest {
         assertFalse(vm.uiState.value.isTimerSettingsDialogVisible)
         verify { timerPreferences.saveTimerConfig("Front Lever", updated) }
     }
+
+    @Test
+    fun openingEmptyScheduledSessionIdAutomaticallyPromotesViaStartOrResume() = runTest {
+        val emptyScheduled = sampleSession().copy(
+            id = 909L,
+            workoutPlanId = 10L,
+            workoutPlanDayId = 20L,
+            workoutDate = "2026-11-10",
+            status = "SCHEDULED",
+            startedAt = null,
+            exercises = emptyList()
+        )
+        val hydrated = sampleSession().copy(
+            id = 909L,
+            status = "IN_PROGRESS"
+        )
+        coEvery { sessionRepository.getSession(909L) } returns Result.success(emptyScheduled)
+        coEvery { sessionRepository.startOrResume(10L, 20L, "2026-11-10", null) } returns Result.success(hydrated)
+        coEvery { sessionRepository.hasPendingChanges(any()) } returns false
+        coEvery { sessionRepository.hasSyncConflict(any()) } returns false
+
+        val vm = WorkoutSessionViewModel(
+            sessionRepository = sessionRepository,
+            savedStateHandle = SavedStateHandle(mapOf("sessionId" to 909L, "date" to "2026-11-10", "planId" to 0L, "dayId" to 0L)),
+            timerPreferences = timerPreferences,
+            audioHapticHelper = audioHapticHelper,
+            notificationHelper = notificationHelper,
+            timeSource = fakeTimeSource
+        )
+        testDispatcher.scheduler.runCurrent()
+        vm.stopElapsedTimer()
+
+        coVerify(exactly = 1) { sessionRepository.getSession(909L) }
+        coVerify(exactly = 1) { sessionRepository.startOrResume(10L, 20L, "2026-11-10", null) }
+        assertEquals("IN_PROGRESS", vm.uiState.value.session?.status)
+        assertTrue(vm.uiState.value.session?.exercises?.isNotEmpty() == true)
+    }
+
+    @Test
+    fun openingCancelledSessionIdBlocksContinuationWithError() = runTest {
+        val cancelledSession = sampleSession().copy(
+            id = 910L,
+            status = "CANCELLED"
+        )
+        coEvery { sessionRepository.getSession(910L) } returns Result.success(cancelledSession)
+
+        val vm = WorkoutSessionViewModel(
+            sessionRepository = sessionRepository,
+            savedStateHandle = SavedStateHandle(mapOf("sessionId" to 910L, "date" to "2026-11-10", "planId" to 0L, "dayId" to 0L)),
+            timerPreferences = timerPreferences,
+            audioHapticHelper = audioHapticHelper,
+            notificationHelper = notificationHelper,
+            timeSource = fakeTimeSource
+        )
+        testDispatcher.scheduler.runCurrent()
+        vm.stopElapsedTimer()
+
+        assertEquals(null, vm.uiState.value.session)
+        assertEquals(
+            "This coach-assigned workout was cancelled because the coaching relationship ended.",
+            vm.uiState.value.error
+        )
+    }
+
+    @Test
+    fun stepByStepSetLoggingAndAdvanceFlow() = runTest {
+        val session = sampleSession()
+        val vm = createViewModel(session)
+
+        assertEquals(com.calisthenics.ai.data.local.SetLoggingMode.STEP_BY_STEP, vm.uiState.value.loggingMode)
+        assertEquals(0, vm.uiState.value.selectedExerciseIndex)
+        assertEquals(0, vm.uiState.value.selectedSetIndex)
+
+        // Complete set 1 and advance
+        coEvery { sessionRepository.saveSetDraft(any(), any(), any(), any()) } returns Result.success(Unit)
+        coEvery { sessionRepository.updateSet(any(), any(), any(), any()) } returns Result.success(
+            session.updateSet(101L, 201L, WorkoutSessionSetUpdate(reps = 10, holdDurationSeconds = null, weightKg = null, assistanceWeightKg = null, completed = true, notes = null))!!
+        )
+
+        vm.completeSetAndAdvance(
+            exerciseId = 101L,
+            setId = 201L,
+            update = WorkoutSessionSetUpdate(reps = 10, holdDurationSeconds = null, weightKg = null, assistanceWeightKg = null, completed = true, notes = null)
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Should have advanced to set index 1
+        assertEquals(1, vm.uiState.value.selectedSetIndex)
+
+        // Navigation between sets
+        vm.prevSet()
+        assertEquals(0, vm.uiState.value.selectedSetIndex)
+        vm.nextSet()
+        assertEquals(1, vm.uiState.value.selectedSetIndex)
+    }
+
+    @Test
+    fun dynamicAddAndRemoveSets() = runTest {
+        val session = sampleSession()
+        val vm = createViewModel(session)
+
+        val updatedWithNewSet = session.copy(
+            exercises = session.exercises.map {
+                if (it.id == 101L) {
+                    it.copy(
+                        targetSets = 3,
+                        sets = it.sets + WorkoutSessionSet(
+                            id = 203L,
+                            version = 0L,
+                            setNumber = 3,
+                            reps = 8,
+                            holdDurationSeconds = null,
+                            weightKg = null,
+                            assistanceWeightKg = null,
+                            completed = false,
+                            completedAt = null,
+                            notes = null
+                        )
+                    )
+                } else it
+            }
+        )
+        coEvery { sessionRepository.addSet(session.id, 101L) } returns Result.success(updatedWithNewSet)
+
+        vm.addSet(101L)
+        testDispatcher.scheduler.runCurrent()
+
+        assertEquals(3, vm.uiState.value.session?.exercises?.first()?.sets?.size)
+        assertEquals(2, vm.uiState.value.selectedSetIndex)
+
+        // Delete set
+        val updatedAfterDelete = session
+        coEvery { sessionRepository.deleteSet(session.id, 101L, 203L) } returns Result.success(updatedAfterDelete)
+
+        vm.deleteSet(101L, 203L)
+        testDispatcher.scheduler.runCurrent()
+
+        assertEquals(2, vm.uiState.value.session?.exercises?.first()?.sets?.size)
+    }
+
+    @Test
+    fun modeSwitchingBetweenStepByStepAndShowAll() = runTest {
+        val session = sampleSession()
+        val vm = createViewModel(session)
+
+        assertEquals(com.calisthenics.ai.data.local.SetLoggingMode.STEP_BY_STEP, vm.uiState.value.loggingMode)
+
+        vm.setLoggingMode(com.calisthenics.ai.data.local.SetLoggingMode.SHOW_ALL)
+        assertEquals(com.calisthenics.ai.data.local.SetLoggingMode.SHOW_ALL, vm.uiState.value.loggingMode)
+
+        vm.setLoggingMode(com.calisthenics.ai.data.local.SetLoggingMode.STEP_BY_STEP)
+        assertEquals(com.calisthenics.ai.data.local.SetLoggingMode.STEP_BY_STEP, vm.uiState.value.loggingMode)
+    }
+
+    @Test
+    fun openingScheduledGettingStartedSession_promotesViaStartScheduledSession() = runTest {
+        val scheduledGs = sampleSession().copy(
+            id = 888L,
+            workoutPlanId = null,
+            workoutPlanDayId = null,
+            source = "GETTING_STARTED",
+            status = "SCHEDULED",
+            gettingStartedEnrollmentId = 44L,
+            gettingStartedDayNumber = 1
+        )
+        val startedGs = scheduledGs.copy(status = "IN_PROGRESS", startedAt = "2026-11-14T10:00:00Z")
+        savedStateHandle["sessionId"] = 888L
+        savedStateHandle["planId"] = 0L
+        savedStateHandle["dayId"] = 0L
+
+        coEvery { sessionRepository.getSession(888L) } returns Result.success(scheduledGs)
+        coEvery { sessionRepository.startScheduledSession(888L) } returns Result.success(startedGs)
+        coEvery { sessionRepository.hasPendingChanges(any()) } returns false
+        coEvery { sessionRepository.hasSyncConflict(any()) } returns false
+
+        val vm = WorkoutSessionViewModel(
+            sessionRepository = sessionRepository,
+            savedStateHandle = savedStateHandle,
+            timerPreferences = timerPreferences,
+            audioHapticHelper = audioHapticHelper,
+            notificationHelper = notificationHelper,
+            timeSource = fakeTimeSource
+        )
+        testDispatcher.scheduler.runCurrent()
+        vm.stopElapsedTimer()
+
+        io.mockk.coVerify(exactly = 1) { sessionRepository.startScheduledSession(888L) }
+        assertEquals("IN_PROGRESS", vm.uiState.value.session?.status)
+    }
 }

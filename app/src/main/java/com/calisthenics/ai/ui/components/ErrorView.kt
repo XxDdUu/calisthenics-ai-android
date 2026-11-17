@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.components
 
+import com.calisthenics.ai.R
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
@@ -34,13 +37,13 @@ fun ErrorView(
     ) {
         Icon(
             imageVector = Icons.Default.Warning,
-            contentDescription = "Error",
+            contentDescription = stringResource(R.string.error_content_description),
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(64.dp)
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Unable to analyze the video.",
+            text = stringResource(R.string.loc_unable_analyze_video),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onBackground
         )
@@ -55,7 +58,7 @@ fun ErrorView(
         Button(
             onClick = onRetry
         ) {
-            Text(text = "Retry")
+            Text(text = stringResource(R.string.common_retry))
         }
     }
 }

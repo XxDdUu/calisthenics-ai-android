@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.auth
 
+import com.calisthenics.ai.R
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.calisthenics.ai.ui.theme.Accent
@@ -79,14 +82,14 @@ fun RegisterOtpVerificationScreen(
         backEnabled = !state.otpVerifying && !state.otpResending && !state.loading
     ) {
         Text(
-            text = "Verify your email",
+            text = stringResource(R.string.verify_email),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = PrimaryText
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Enter the 6-digit verification code sent to your email to activate your account.",
+            text = stringResource(R.string.enter_registration_code),
             style = MaterialTheme.typography.bodyMedium,
             color = SecondaryText
         )
@@ -113,7 +116,7 @@ fun RegisterOtpVerificationScreen(
                 ) {
                     Icon(
                         Icons.Default.Email,
-                        contentDescription = "Email",
+                        contentDescription = stringResource(R.string.email),
                         tint = Accent,
                         modifier = Modifier.size(20.dp)
                     )
@@ -133,7 +136,7 @@ fun RegisterOtpVerificationScreen(
                     enabled = !state.otpVerifying && !state.otpResending && !state.loading
                 ) {
                     Text(
-                        text = "Change",
+                        text = stringResource(R.string.loc_change),
                         color = Accent,
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Bold
@@ -187,7 +190,7 @@ fun RegisterOtpVerificationScreen(
             if (state.otpVerifying) {
                 CircularProgressIndicator(Modifier.size(20.dp), color = Ink, strokeWidth = 2.dp)
             } else {
-                Text("Verify & Create Account", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.loc_verify_create_account), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
             }
         }
 
@@ -200,7 +203,7 @@ fun RegisterOtpVerificationScreen(
         ) {
             if (state.otpResendCooldownSeconds > 0) {
                 Text(
-                    text = "Resend code in ${formatCountdown(state.otpResendCooldownSeconds)}",
+                    text = stringResource(R.string.resend_code_in, formatCountdown(state.otpResendCooldownSeconds)),
                     color = SecondaryText,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -210,7 +213,7 @@ fun RegisterOtpVerificationScreen(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "Didn't receive code? ",
+                        text = stringResource(R.string.didnt_receive_code),
                         color = SecondaryText,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -222,14 +225,14 @@ fun RegisterOtpVerificationScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "Resending...",
+                            text = stringResource(R.string.resending),
                             color = Accent,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                     } else {
                         Text(
-                            text = "Resend Code",
+                            text = stringResource(R.string.resend_code),
                             color = Accent,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,

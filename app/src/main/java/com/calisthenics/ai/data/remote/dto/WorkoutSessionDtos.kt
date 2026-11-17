@@ -37,6 +37,7 @@ data class WorkoutSessionResponseDto(
     @SerializedName("title") val title: String,
     @SerializedName("workoutDate") val workoutDate: String?,
     @SerializedName("status") val status: String,
+    @SerializedName("classification") val classification: String? = null,
     @SerializedName("startedAt") val startedAt: String?,
     @SerializedName("lastSavedAt") val lastSavedAt: String?,
     @SerializedName("completedAt") val completedAt: String?,
@@ -47,7 +48,9 @@ data class WorkoutSessionResponseDto(
     @SerializedName("completedSets") val completedSets: Int = 0,
     @SerializedName("totalReps") val totalReps: Int = 0,
     @SerializedName("totalHoldDurationSeconds") val totalHoldDurationSeconds: Int = 0,
-    @SerializedName("exercises") val exercises: List<WorkoutSessionExerciseDto> = emptyList()
+    @SerializedName("exercises") val exercises: List<WorkoutSessionExerciseDto> = emptyList(),
+    @SerializedName("gettingStartedEnrollmentId") val gettingStartedEnrollmentId: Long? = null,
+    @SerializedName("gettingStartedDayNumber") val gettingStartedDayNumber: Int? = null
 )
 
 data class WorkoutSessionExerciseDto(

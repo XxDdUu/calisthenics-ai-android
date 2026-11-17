@@ -1,11 +1,14 @@
 package com.calisthenics.ai.domain.repository
 
 import com.calisthenics.ai.domain.model.AuthToken
+import com.calisthenics.ai.domain.model.Gender
+import com.calisthenics.ai.domain.model.OnboardingStatus
 import com.calisthenics.ai.domain.model.SavedAccount
 import com.calisthenics.ai.domain.model.UserProfile
 
 interface AuthRepository {
     suspend fun login(email: String, password: String): Result<AuthToken>
+    suspend fun loginWithFirebase(idToken: String): Result<AuthToken> = loginWithGoogle(idToken)
     suspend fun loginWithGoogle(idToken: String): Result<AuthToken> =
         Result.failure(UnsupportedOperationException())
     suspend fun register(email: String, password: String, fullName: String): Result<RegistrationInitiation>
@@ -21,6 +24,13 @@ interface AuthRepository {
         Result.failure(UnsupportedOperationException())
     suspend fun refreshToken(): Result<AuthToken> = Result.failure(UnsupportedOperationException())
     suspend fun getCurrentUser(): Result<UserProfile>
+    suspend fun updateGender(gender: Gender): Result<UserProfile> =
+        Result.failure(UnsupportedOperationException())
+    fun getCachedGender(userId: Long? = getUserId()): Gender? = null
+    suspend fun updateOnboardingStatus(status: OnboardingStatus): Result<UserProfile> =
+        Result.failure(UnsupportedOperationException())
+    fun getCachedOnboardingStatus(userId: Long? = getUserId()): OnboardingStatus =
+        OnboardingStatus.NOT_SHOWN
     fun isLoggedIn(): Boolean
     fun getUserRole(): String? = null
     fun getUserId(): Long? = null

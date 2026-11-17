@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.progression
 
+import com.calisthenics.ai.R
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +42,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -62,12 +65,12 @@ fun ProgressionSelectionScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = "Choose Progression") },
+                title = { Text(text = stringResource(R.string.choose_progression)) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.common_back)
                         )
                     }
                 },
@@ -108,7 +111,7 @@ fun ProgressionSelectionScreen(
         when {
             uiState.isLoading -> {
                 LoadingView(
-                    message = "Loading progressions...",
+                    message = stringResource(R.string.loc_loading_progressions),
                     modifier = Modifier.padding(padding)
                 )
             }

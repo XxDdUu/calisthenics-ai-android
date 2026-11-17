@@ -5,8 +5,12 @@ import android.util.Base64
 import com.calisthenics.ai.domain.model.SavedAccount
 import com.google.gson.JsonParser
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
+import java.util.concurrent.atomic.AtomicLong
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -18,6 +22,50 @@ import javax.inject.Singleton
 open class TokenManager @Inject constructor(@ApplicationContext context: Context) {
     private val preferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
     private val keyStore: KeyStore by lazy { KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) } }
+    private val generationCounter = AtomicLong(0L)
+    private val _sessionState = MutableStateFlow(readCurrentSessionState())
+    open val sessionState: StateFlow<AccountSession> = _sessionState.asStateFlow()
+
+    open fun currentSessionSnapshot(): AccountSession = _sessionState.value
+
+    private fun readCurrentSessionState(): AccountSession {
+        val activeId = getActiveUserId()
+        val hasToken = activeId != null && activeId > 0L && !getAccessToken().isNullOrBlank()
+        val resolvedUserId = if (hasToken) activeId else activeId?.takeIf { it > 0L && preferences.contains(KEY_ACTIVE_USER_ID) }
+        val effectiveUserId = resolvedUserId?.takeIf { it > 0L }
+        val role = if (effectiveUserId != null) getUserRole() else null
+        val gen = if (generationCounter.get() == 0L && effectiveUserId != null) {
+            generationCounter.incrementAndGet()
+        } else {
+            generationCounter.get()
+        }
+        return AccountSession(
+            activeUserId = effectiveUserId,
+            role = role,
+            generation = gen
+        )
+    }
+
+    private fun updateSessionState(
+        activeUserId: Long?,
+        role: String?,
+        forceBumpGeneration: Boolean = false
+    ) {
+        val previous = _sessionState.value
+        val normalizedUserId = activeUserId?.takeIf { it > 0L }
+        val normalizedRole = if (normalizedUserId != null) role?.takeIf { it in SUPPORTED_ROLES } else null
+        val userChanged = previous.activeUserId != normalizedUserId
+        val nextGen = if (forceBumpGeneration || userChanged) {
+            generationCounter.incrementAndGet()
+        } else {
+            previous.generation
+        }
+        _sessionState.value = AccountSession(
+            activeUserId = normalizedUserId,
+            role = normalizedRole,
+            generation = nextGen
+        )
+    }
 
     open fun saveAuthToken(
         accessToken: String,
@@ -28,9 +76,10 @@ open class TokenManager @Inject constructor(@ApplicationContext context: Context
         fullName: String? = null,
         avatarUrl: String? = null
     ) {
-        val resolvedUserId = userId
+        val claimUserId = extractClaimFromToken(accessToken, "sub")?.toLongOrNull()?.takeIf { it > 0L }
+        val resolvedUserId = userId?.takeIf { it > 0L }
+            ?: claimUserId
             ?: getUserId()
-            ?: extractClaimFromToken(accessToken, "sub")?.toLongOrNull()
             ?: NO_USER_ID
 
         val resolvedEmail = email?.takeIf { it.isNotBlank() }
@@ -85,6 +134,11 @@ open class TokenManager @Inject constructor(@ApplicationContext context: Context
 
         // commit() so a camera-startup crash cannot drop a login that only reached apply().
         editor.commit()
+        if (resolvedUserId > 0L) {
+            updateSessionState(resolvedUserId, resolvedRole)
+        } else {
+            updateSessionState(null, null)
+        }
     }
 
     open fun getAccessToken(): String? {
@@ -97,6 +151,25 @@ open class TokenManager @Inject constructor(@ApplicationContext context: Context
             }
         }
         return decrypt(preferences.getString(KEY_ACCESS_TOKEN, null))
+    }
+
+    open fun getAccessTokenFor(userId: Long?): String? {
+        if (userId != null && userId > 0L) {
+            val encrypted = preferences.getString(keyAccountAccessToken(userId), null)
+            if (!encrypted.isNullOrBlank()) {
+                val decrypted = decrypt(encrypted)
+                if (!decrypted.isNullOrBlank()) return decrypted
+            }
+            if (getActiveUserId() == userId) {
+                return decrypt(preferences.getString(KEY_ACCESS_TOKEN, null))
+            }
+            return null
+        }
+        return getAccessToken()
+    }
+
+    open fun extractUserIdFromToken(token: String?): Long? {
+        return extractClaimFromToken(token, "sub")?.toLongOrNull()?.takeIf { it > 0L }
     }
 
     open fun getRefreshToken(): String? {
@@ -203,11 +276,13 @@ open class TokenManager @Inject constructor(@ApplicationContext context: Context
             editor.remove(KEY_USER_ROLE)
         }
 
-        editor.apply()
+        editor.commit()
+        updateSessionState(targetUserId, role)
         return true
     }
 
     open fun removeAccount(userId: Long): Boolean {
+        val wasActive = getActiveUserId() == userId
         val editor = preferences.edit()
         val accountIds = getSavedAccountIds().toMutableSet()
         accountIds.remove(userId.toString())
@@ -220,9 +295,11 @@ open class TokenManager @Inject constructor(@ApplicationContext context: Context
         editor.remove(keyAccountFullName(userId))
         editor.remove(keyAccountAvatarUrl(userId))
         editor.remove(keyAccountRole(userId))
+        editor.remove(keyAccountGender(userId))
+        editor.remove(keyAccountOnboardingStatus(userId))
         editor.remove(keyAccountLastActive(userId))
 
-        if (getActiveUserId() == userId) {
+        if (wasActive) {
             editor.remove(KEY_ACTIVE_USER_ID)
             editor.remove(KEY_ACCESS_TOKEN)
             editor.remove(KEY_REFRESH_TOKEN)
@@ -230,7 +307,10 @@ open class TokenManager @Inject constructor(@ApplicationContext context: Context
             editor.remove(KEY_USER_ROLE)
         }
 
-        editor.apply()
+        editor.commit()
+        if (wasActive) {
+            updateSessionState(null, null)
+        }
         return true
     }
 
@@ -247,14 +327,52 @@ open class TokenManager @Inject constructor(@ApplicationContext context: Context
         editor.apply()
     }
 
+    open fun saveAccountGender(userId: Long, gender: String?) {
+        if (userId <= 0L) return
+        val editor = preferences.edit()
+        val normalized = gender?.trim()?.uppercase()?.takeIf { it == "MALE" || it == "FEMALE" }
+        if (normalized != null) {
+            editor.putString(keyAccountGender(userId), normalized)
+        } else {
+            editor.remove(keyAccountGender(userId))
+        }
+        editor.apply()
+    }
+
+    open fun getAccountGender(userId: Long): String? {
+        if (userId <= 0L) return null
+        return preferences.getString(keyAccountGender(userId), null)
+    }
+
+    open fun saveAccountOnboardingStatus(userId: Long, status: String?) {
+        if (userId <= 0L) return
+        val editor = preferences.edit()
+        val normalized = status?.trim()?.uppercase()?.takeIf {
+            it == "NOT_SHOWN" || it == "COMPACT_BANNER" || it == "DISMISSED"
+        }
+        if (normalized != null) {
+            editor.putString(keyAccountOnboardingStatus(userId), normalized)
+        } else {
+            editor.remove(keyAccountOnboardingStatus(userId))
+        }
+        editor.apply()
+    }
+
+    open fun getAccountOnboardingStatus(userId: Long): String? {
+        if (userId <= 0L) return null
+        return preferences.getString(keyAccountOnboardingStatus(userId), null)
+    }
+
     open fun deactivateActiveSession() {
+        val hadActiveUser = _sessionState.value.activeUserId != null || getActiveUserId() != null
         preferences.edit()
             .remove(KEY_ACTIVE_USER_ID)
             .remove(KEY_ACCESS_TOKEN)
             .remove(KEY_REFRESH_TOKEN)
             .remove(KEY_USER_ID)
             .remove(KEY_USER_ROLE)
-            .apply()
+            .commit()
+        updateSessionState(null, null, forceBumpGeneration = hadActiveUser)
     }
 
     open fun getUserEmail(): String? {
@@ -270,18 +388,22 @@ open class TokenManager @Inject constructor(@ApplicationContext context: Context
         if (activeId != null && activeId != NO_USER_ID) {
             removeAccount(activeId)
         } else {
+            val hadSession = _sessionState.value.activeUserId != null
             preferences.edit()
                 .remove(KEY_ACTIVE_USER_ID)
                 .remove(KEY_ACCESS_TOKEN)
                 .remove(KEY_REFRESH_TOKEN)
                 .remove(KEY_USER_ID)
                 .remove(KEY_USER_ROLE)
-                .apply()
+                .commit()
+            updateSessionState(null, null, forceBumpGeneration = hadSession)
         }
     }
 
     open fun clearAll() {
-        preferences.edit().clear().apply()
+        val hadSession = _sessionState.value.activeUserId != null || getActiveUserId() != null
+        preferences.edit().clear().commit()
+        updateSessionState(null, null, forceBumpGeneration = hadSession)
     }
 
     open fun hasValidSession(): Boolean {
@@ -367,6 +489,8 @@ open class TokenManager @Inject constructor(@ApplicationContext context: Context
     private fun keyAccountFullName(id: Long) = "account_${id}_full_name"
     private fun keyAccountAvatarUrl(id: Long) = "account_${id}_avatar_url"
     private fun keyAccountRole(id: Long) = "account_${id}_role"
+    private fun keyAccountGender(id: Long) = "account_${id}_gender"
+    private fun keyAccountOnboardingStatus(id: Long) = "account_${id}_onboarding_status"
     private fun keyAccountLastActive(id: Long) = "account_${id}_last_active"
 
     private fun decodeBase64UrlSafe(encoded: String): ByteArray {

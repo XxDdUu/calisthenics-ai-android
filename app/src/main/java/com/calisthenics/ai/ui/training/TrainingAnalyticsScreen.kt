@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.training
 
+import com.calisthenics.ai.R
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -24,6 +27,7 @@ import com.calisthenics.ai.ui.components.DarkCard
 import com.calisthenics.ai.ui.components.EmptyState
 import com.calisthenics.ai.ui.components.PillBadge
 import com.calisthenics.ai.ui.components.StatCard
+import com.calisthenics.ai.ui.pr.SharePrBottomSheet
 import com.calisthenics.ai.ui.theme.*
 
 private val FireOrange = Color(0xFFFF6B4A)
@@ -56,7 +60,7 @@ fun TrainingAnalyticsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Training Analytics",
+                        stringResource(R.string.loc_training_analytics),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryText
@@ -64,12 +68,12 @@ fun TrainingAnalyticsScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PrimaryText)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back), tint = PrimaryText)
                     }
                 },
                 actions = {
                     IconButton(onClick = { viewModel.loadAll() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = PrimaryText)
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.common_refresh), tint = PrimaryText)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Ink)
@@ -86,9 +90,9 @@ fun TrainingAnalyticsScreen(
             }
             state.overview == null && state.weekly == null -> {
                 EmptyState(
-                    title = "Analytics Unavailable",
-                    body = state.error ?: "Complete workout sessions to unlock training analytics.",
-                    action = "Retry",
+                    title = stringResource(R.string.loc_analytics_unavailable),
+                    body = state.error ?: stringResource(R.string.loc_failed_analytics_unlock),
+                    action = stringResource(R.string.common_retry),
                     onAction = { viewModel.loadAll() }
                 )
             }
@@ -120,19 +124,19 @@ fun TrainingAnalyticsScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Icon(
                                             Icons.Default.LocalFireDepartment,
-                                            contentDescription = "Streak",
+                                            contentDescription = stringResource(R.string.streak),
                                             tint = streakColor,
                                             modifier = Modifier.size(24.dp)
                                         )
                                         Text(
-                                            "Consistency & Streaks",
+                                            stringResource(R.string.loc_consistency_streaks),
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold,
                                             color = PrimaryText
                                         )
                                     }
                                     PillBadge(
-                                        "${overview?.currentStreakDays ?: 0} Day Streak",
+                                        stringResource(R.string.loc_day_streak, overview?.currentStreakDays ?: 0),
                                         isAccent = true
                                     )
                                 }
@@ -142,22 +146,22 @@ fun TrainingAnalyticsScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     StatCard(
-                                        label = "Current",
+                                        label = stringResource(R.string.current),
                                         value = "${overview?.currentStreakDays ?: 0}d",
                                         modifier = Modifier.weight(1f)
                                     )
                                     StatCard(
-                                        label = "Longest",
+                                        label = stringResource(R.string.longest),
                                         value = "${overview?.longestStreakDays ?: 0}d",
                                         modifier = Modifier.weight(1f)
                                     )
                                     StatCard(
-                                        label = "This Month",
+                                        label = stringResource(R.string.this_month),
                                         value = "${overview?.activeDaysThisMonth ?: 0}d",
                                         modifier = Modifier.weight(1f)
                                     )
                                     StatCard(
-                                        label = "Freq",
+                                        label = stringResource(R.string.frequency_short),
                                         value = "%.1f/w".format(insights?.weeklyFrequency ?: 0.0),
                                         modifier = Modifier.weight(1f)
                                     )
@@ -176,9 +180,9 @@ fun TrainingAnalyticsScreen(
                             ) {
                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Icon(Icons.Default.Insights, contentDescription = "Insights", tint = Accent, modifier = Modifier.size(20.dp))
+                                        Icon(Icons.Default.Insights, contentDescription = stringResource(R.string.loc_insights), tint = Accent, modifier = Modifier.size(20.dp))
                                         Text(
-                                            "Training Insights",
+                                            stringResource(R.string.loc_training_insights),
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold,
                                             color = PrimaryText
@@ -221,7 +225,7 @@ fun TrainingAnalyticsScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            "Weekly Performance",
+                                            stringResource(R.string.loc_weekly_performance),
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold,
                                             color = PrimaryText
@@ -229,7 +233,7 @@ fun TrainingAnalyticsScreen(
                                         val dateRange = if (weekly.startDate.isNotBlank() && weekly.endDate.isNotBlank()) {
                                             "${weekly.startDate.takeLast(5)} - ${weekly.endDate.takeLast(5)}"
                                         } else {
-                                            "This Week"
+                                            stringResource(R.string.loc_this_week)
                                         }
                                         Text(
                                             dateRange,
@@ -243,17 +247,17 @@ fun TrainingAnalyticsScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         StatCard(
-                                            label = "Workouts",
+                                            label = stringResource(R.string.workouts),
                                             value = weekly.totalWorkouts.toString(),
                                             modifier = Modifier.weight(1f)
                                         )
                                         StatCard(
-                                            label = "Total Volume",
+                                            label = stringResource(R.string.total_volume),
                                             value = "${weekly.totalVolumeKg.toInt()} kg",
                                             modifier = Modifier.weight(1f)
                                         )
                                         StatCard(
-                                            label = "Reps",
+                                            label = stringResource(R.string.reps),
                                             value = weekly.totalReps.toString(),
                                             modifier = Modifier.weight(1f)
                                         )
@@ -332,7 +336,7 @@ fun TrainingAnalyticsScreen(
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Icon(Icons.Default.EmojiEvents, contentDescription = null, tint = Warning, modifier = Modifier.size(20.dp))
                                 Text(
-                                    "Personal Records (${overview?.totalPersonalRecords ?: recentPRs.size})",
+                                    stringResource(R.string.loc_personal_records_count_label, overview?.totalPersonalRecords ?: recentPRs.size),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = PrimaryText
@@ -340,7 +344,7 @@ fun TrainingAnalyticsScreen(
                             }
                             if (onManagePrs != null) {
                                 TextButton(onClick = onManagePrs) {
-                                    Text("Manage All", color = Accent, fontSize = 12.sp)
+                                    Text(stringResource(R.string.manage_all), color = Accent, fontSize = 12.sp)
                                 }
                             }
                         }
@@ -354,13 +358,13 @@ fun TrainingAnalyticsScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Text("No personal records set yet. Keep training!", color = SecondaryText)
+                                    Text(stringResource(R.string.loc_no_prs_set), color = SecondaryText)
                                     if (onManagePrs != null) {
                                         Button(
                                             onClick = onManagePrs,
                                             colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink)
                                         ) {
-                                            Text("Track New PR")
+                                            Text(stringResource(R.string.track_new_pr))
                                         }
                                     }
                                 }
@@ -384,7 +388,7 @@ fun TrainingAnalyticsScreen(
                                     ) {
                                         Column {
                                             Text(
-                                                pr.exerciseName.ifEmpty { "Exercise Record" },
+                                                pr.exerciseName.ifEmpty { stringResource(R.string.loc_exercise_record_fallback) },
                                                 fontWeight = FontWeight.Bold,
                                                 color = PrimaryText,
                                                 style = MaterialTheme.typography.bodyLarge
@@ -431,7 +435,7 @@ fun TrainingAnalyticsScreen(
                                                 )
                                                 Spacer(Modifier.width(4.dp))
                                                 Text(
-                                                    "Shared with Coach",
+                                                    stringResource(R.string.loc_shared_with_coach),
                                                     color = Accent,
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Medium
@@ -439,7 +443,7 @@ fun TrainingAnalyticsScreen(
                                             }
                                         } else {
                                             OutlinedButton(
-                                                onClick = { viewModel.shareRecordWithCoach(pr.id) },
+                                                onClick = { viewModel.openShareSheet(pr) },
                                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                                 shape = RoundedCornerShape(8.dp),
                                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Accent),
@@ -447,7 +451,7 @@ fun TrainingAnalyticsScreen(
                                             ) {
                                                 Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(14.dp))
                                                 Spacer(Modifier.width(4.dp))
-                                                Text("Share with Coach", fontSize = 11.sp)
+                                                Text(stringResource(R.string.share_with_coach), fontSize = 11.sp)
                                             }
                                         }
                                     }
@@ -462,7 +466,7 @@ fun TrainingAnalyticsScreen(
                                         ) {
                                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                                 Text(
-                                                    "Coach Feedback (${sharedRecord.coachName}):",
+                                                    stringResource(R.string.loc_coach_feedback_named_colon, sharedRecord.coachName),
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = Accent
@@ -486,5 +490,26 @@ fun TrainingAnalyticsScreen(
                 }
             }
         }
+    }
+
+    state.sharingPr?.let { prToShare ->
+        val alreadySharedIds = remember(state.sharedPrs, prToShare.id) {
+            state.sharedPrs
+                .filter { it.personalRecord.id == prToShare.id }
+                .map { it.coachUserId }
+                .toSet()
+        }
+        SharePrBottomSheet(
+            pr = prToShare,
+            recipients = state.shareRecipients,
+            alreadySharedRecipientIds = alreadySharedIds,
+            isLoadingRecipients = state.isLoadingRecipients,
+            isSharing = state.isSharingPr,
+            errorMessage = state.shareError,
+            onDismiss = { viewModel.dismissShareSheet() },
+            onConfirmShare = { recipientId ->
+                viewModel.shareRecordWithCoach(prToShare.id, recipientId)
+            }
+        )
     }
 }

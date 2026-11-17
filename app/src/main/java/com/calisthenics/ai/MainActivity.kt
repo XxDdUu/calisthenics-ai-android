@@ -8,14 +8,19 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.rememberNavController
 import com.calisthenics.ai.data.local.SessionManager
 import com.calisthenics.ai.data.network.ConnectivityMonitor
 import com.calisthenics.ai.data.network.OfflineAccessPolicy
 import com.calisthenics.ai.domain.repository.AuthRepository
+import com.calisthenics.ai.ui.locale.LanguageManager
 import com.calisthenics.ai.ui.navigation.NavGraph
 import com.calisthenics.ai.ui.theme.CalisthenicsAITheme
 import com.calisthenics.ai.ui.theme.ThemeViewModel
@@ -37,6 +42,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var authRepository: AuthRepository
 
+    @Inject
+    lateinit var languageManager: LanguageManager
+
     private val themeViewModel: ThemeViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,19 +52,26 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val themeMode by themeViewModel.themeMode.collectAsState()
-            CalisthenicsAITheme(themeMode = themeMode) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    val navController = rememberNavController()
-                    NavGraph(
-                        navController = navController,
-                        sessionManager = sessionManager,
-                        connectivityMonitor = connectivityMonitor,
-                        offlineAccessPolicy = offlineAccessPolicy,
-                        hasValidSession = { authRepository.isLoggedIn() }
-                    )
+            val language by languageManager.language.collectAsState()
+            val localizedContext = remember(language) { languageManager.localizedContext(this@MainActivity, language) }
+            CompositionLocalProvider(
+                LocalContext provides localizedContext,
+                LocalConfiguration provides localizedContext.resources.configuration
+            ) {
+                CalisthenicsAITheme(themeMode = themeMode) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        val navController = rememberNavController()
+                        NavGraph(
+                            navController = navController,
+                            sessionManager = sessionManager,
+                            connectivityMonitor = connectivityMonitor,
+                            offlineAccessPolicy = offlineAccessPolicy,
+                            hasValidSession = { authRepository.isLoggedIn() }
+                        )
+                    }
                 }
             }
         }

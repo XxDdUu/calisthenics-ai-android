@@ -3,6 +3,8 @@ package com.calisthenics.ai.ui.workoutplan.details
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.calisthenics.ai.data.local.AccountSessionGuard
+import com.calisthenics.ai.data.local.AccountSessionManager
 import com.calisthenics.ai.domain.model.Exercise
 import com.calisthenics.ai.domain.model.ExerciseCategory
 import com.calisthenics.ai.domain.model.UserWorkoutPlan
@@ -41,6 +43,7 @@ data class WorkoutPlanDetailsUiState(
     val dayExercises: Map<Long, List<UserWorkoutPlanExercise>> = emptyMap(),
     val error: String? = null,
     val isReorderingExercises: Boolean = false,
+    val startDate: String? = null,
     // Add / Edit Exercise Sheet
     val isAddExerciseSheetOpen: Boolean = false,
     val assignmentToEdit: UserWorkoutPlanExercise? = null,
@@ -87,6 +90,13 @@ data class WorkoutPlanDetailsUiState(
             val matchesCategory = selectedCategory == null || exercise.category == selectedCategory
             matchesQuery && matchesCategory
         }
+
+    val parsedStartDate: java.time.LocalDate?
+        get() = WorkoutPlanDateFormatter.parseStartDate(startDate ?: plan?.startDate)
+
+    fun dateLabelFor(dayOfWeek: WorkoutDayOfWeek): String? {
+        return WorkoutPlanDateFormatter.formatWorkoutDayDateLabel(dayOfWeek, parsedStartDate)
+    }
 }
 
 data class CustomWorkoutEditorState(
@@ -111,7 +121,9 @@ class WorkoutPlanDetailsViewModel @Inject constructor(
     private val removeExerciseFromPlanDayUseCase: RemoveExerciseFromPlanDayUseCase,
     private val updateWorkoutPlanUseCase: UpdateWorkoutPlanUseCase,
     private val updateWorkoutPlanDaysUseCase: UpdateWorkoutPlanDaysUseCase,
-    private val getExercisesUseCase: GetExercisesUseCase
+    private val getExercisesUseCase: GetExercisesUseCase,
+    private val workoutPlanRepository: com.calisthenics.ai.domain.repository.WorkoutPlanRepository,
+    private val accountSessionManager: AccountSessionManager = AccountSessionManager()
 ) : ViewModel() {
 
     private val planId: Long = savedStateHandle.get<String>("planId")?.toLongOrNull()
@@ -120,13 +132,31 @@ class WorkoutPlanDetailsViewModel @Inject constructor(
     private val initialDay = savedStateHandle.get<String>("dayOfWeek")
         ?.let(WorkoutDayOfWeek::fromName)
         ?: WorkoutDayOfWeek.MONDAY
+    private val initialStartDate: String? = savedStateHandle.get<String>("startDate")
 
     private val _uiState = MutableStateFlow(
-        WorkoutPlanDetailsUiState(planId = planId, selectedDayOfWeek = initialDay)
+        WorkoutPlanDetailsUiState(planId = planId, selectedDayOfWeek = initialDay, startDate = initialStartDate)
     )
     val uiState: StateFlow<WorkoutPlanDetailsUiState> = _uiState.asStateFlow()
 
+    private val sessionGuard = AccountSessionGuard(
+        parentScope = viewModelScope,
+        sessionManager = accountSessionManager,
+        onSessionCleared = {
+            _uiState.update {
+                WorkoutPlanDetailsUiState(
+                    planId = planId,
+                    selectedDayOfWeek = initialDay,
+                    startDate = initialStartDate,
+                    availableExercises = it.availableExercises
+                )
+            }
+        },
+        onSessionActive = { loadPlanDetails() }
+    )
+
     init {
+        sessionGuard.startObserving()
         loadPlanDetails()
         loadExerciseCatalog()
     }
@@ -137,17 +167,27 @@ class WorkoutPlanDetailsViewModel @Inject constructor(
             return
         }
 
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             _uiState.update { it.copy(isLoading = true, error = null) }
             getWorkoutPlanDetailsUseCase(planId)
                 .onSuccess { plan ->
+                    if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
                     val exercisesMap = plan.days.associate { day ->
                         day.id to day.exercises
+                    }
+                    val effectiveStartDate = plan.startDate
+                        ?: initialStartDate
+                        ?: resolveAssignmentStartDate(plan.id)
+                    val updatedPlan = if (effectiveStartDate != null && plan.startDate == null) {
+                        plan.copy(startDate = effectiveStartDate)
+                    } else {
+                        plan
                     }
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            plan = plan,
+                            plan = updatedPlan,
+                            startDate = effectiveStartDate ?: it.startDate,
                             dayExercises = exercisesMap
                         )
                     }
@@ -160,6 +200,21 @@ class WorkoutPlanDetailsViewModel @Inject constructor(
                         )
                     }
                 }
+        }
+    }
+
+    private suspend fun resolveAssignmentStartDate(planId: Long): String? {
+        return try {
+            val myAssignments = workoutPlanRepository.getMyAssignments().getOrNull().orEmpty()
+            val match = myAssignments.firstOrNull { it.workoutPlan.id == planId && !it.startDate.isNullOrBlank() }
+            if (match != null) {
+                match.startDate
+            } else {
+                val coachAssignments = workoutPlanRepository.getMyCoachAssignments().getOrNull().orEmpty()
+                coachAssignments.firstOrNull { it.workoutPlan.id == planId && !it.startDate.isNullOrBlank() }?.startDate
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 

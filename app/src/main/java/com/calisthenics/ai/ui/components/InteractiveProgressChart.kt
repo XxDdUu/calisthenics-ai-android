@@ -1,5 +1,9 @@
 package com.calisthenics.ai.ui.components
 
+import com.calisthenics.ai.R
+
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -117,7 +121,7 @@ fun InteractiveProgressChart(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No workout logs recorded for this timeframe.",
+                        text = stringResource(R.string.loc_no_workout_logs),
                         color = SecondaryText,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -151,13 +155,13 @@ fun InteractiveProgressChart(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.EmojiEvents,
-                                            contentDescription = "PR",
+                                            contentDescription = stringResource(R.string.loc_pr_short),
                                             tint = goldPr,
                                             modifier = Modifier.size(12.dp)
                                         )
                                         Spacer(Modifier.width(2.dp))
                                         Text(
-                                            "PR",
+                                            stringResource(R.string.loc_pr_short),
                                             color = goldPr,
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold

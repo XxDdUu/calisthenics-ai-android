@@ -1,6 +1,8 @@
 package com.calisthenics.ai.data.remote.api
 
 import com.calisthenics.ai.BuildConfig
+import com.calisthenics.ai.data.local.AccountSession
+import com.calisthenics.ai.data.local.AuthRequestSession
 import com.calisthenics.ai.data.local.SessionManager
 import com.calisthenics.ai.data.local.TokenManager
 import com.calisthenics.ai.data.remote.dto.AuthResponseDto
@@ -56,11 +58,20 @@ open class TokenAuthenticator @Inject constructor(
             return null
         }
 
+        val requestSession = request.tag(AuthRequestSession::class.java)
+        val requestToken = request.header("Authorization")?.removePrefix("Bearer ")?.trim()
+        if (!isRequestForActiveSession(requestSession, requestToken)) {
+            return null
+        }
+
         // 4. Synchronized single-flight refresh block to prevent concurrent requests
         // from triggering multiple simultaneous refresh operations
         synchronized(refreshLock) {
+            if (!isRequestForActiveSession(requestSession, requestToken)) {
+                return null
+            }
+            val startSession = tokenManager.currentSessionSnapshot()
             val currentAccessToken = tokenManager.getAccessToken()
-            val requestToken = request.header("Authorization")?.removePrefix("Bearer ")?.trim()
 
             // If another thread already refreshed the token while this thread was waiting,
             // retry with the newly acquired token immediately
@@ -72,14 +83,30 @@ open class TokenAuthenticator @Inject constructor(
 
             // Verify refresh token is available and not expired
             val refreshToken = tokenManager.getRefreshToken()
-            if (refreshToken.isNullOrBlank() || tokenManager.isRefreshTokenExpired()) {
-                handleSessionExpired()
+            if (refreshToken.isNullOrBlank()) {
+                if (!requestToken.isNullOrBlank() && isRequestForActiveSession(requestSession, requestToken)) {
+                    handleSessionExpired()
+                }
+                return null
+            }
+            if (tokenManager.isRefreshTokenExpired()) {
+                if (isRequestForActiveSession(requestSession, requestToken)) {
+                    handleSessionExpired()
+                }
                 return null
             }
 
             // Perform the refresh operation
             val refreshResult = performRefresh(refreshToken)
             return if (refreshResult != null) {
+                if (!isRequestForActiveSession(requestSession, requestToken)) {
+                    return null
+                }
+                val expectedUserId = startSession.activeUserId?.takeIf { it > 0L }
+                    ?: requestSession?.userId?.takeIf { it > 0L }
+                if (expectedUserId != null && refreshResult.userId > 0L && refreshResult.userId != expectedUserId) {
+                    return null
+                }
                 tokenManager.saveAuthToken(
                     accessToken = refreshResult.accessToken,
                     refreshToken = refreshResult.refreshToken,
@@ -93,10 +120,33 @@ open class TokenAuthenticator @Inject constructor(
                 // Device is offline or network timeout: preserve session tokens and do not force logout
                 null
             } else {
-                handleSessionExpired()
+                if (isRequestForActiveSession(requestSession, requestToken)) {
+                    handleSessionExpired()
+                }
                 null
             }
         }
+    }
+
+    private fun isRequestForActiveSession(
+        requestSession: AuthRequestSession?,
+        requestToken: String?
+    ): Boolean {
+        val currentSession = tokenManager.currentSessionSnapshot()
+        val taggedUserId = requestSession?.userId?.takeIf { it > 0L }
+        if (requestSession != null && taggedUserId != null) {
+            val activeUserId = currentSession.activeUserId?.takeIf { it > 0L }
+                ?: tokenManager.getUserId()?.takeIf { it > 0L }
+            return taggedUserId == activeUserId &&
+                requestSession.generation == currentSession.generation
+        }
+        val requestSub = tokenManager.extractUserIdFromToken(requestToken)?.takeIf { it > 0L }
+        val currentUserId = currentSession.activeUserId?.takeIf { it > 0L }
+            ?: tokenManager.getUserId()?.takeIf { it > 0L }
+        if (requestSub != null && currentUserId != null && requestSub != currentUserId) {
+            return false
+        }
+        return true
     }
 
     @Volatile
@@ -155,6 +205,7 @@ open class TokenAuthenticator @Inject constructor(
         return path.contains("/api/v1/auth/register") ||
                 path.contains("/api/v1/auth/login") ||
                 path.contains("/api/v1/auth/refresh") ||
-                path.contains("/api/v1/auth/firebase")
+                path.contains("/api/v1/auth/firebase") ||
+                path.contains("/api/v1/auth/google")
     }
 }

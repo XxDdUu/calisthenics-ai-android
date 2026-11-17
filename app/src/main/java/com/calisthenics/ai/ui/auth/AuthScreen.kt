@@ -42,6 +42,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -129,12 +130,12 @@ fun AuthScreen(
                 IconButton(onClick = onBackClick) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Quay lại",
+                        contentDescription = stringResource(R.string.common_back),
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
                 Text(
-                    "Thêm tài khoản mới",
+                    stringResource(R.string.loc_add_account_vietnamese),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -142,14 +143,14 @@ fun AuthScreen(
         }
         Icon(
             Icons.Default.FitnessCenter,
-            contentDescription = "Calisthenics AI",
+            contentDescription = stringResource(R.string.loc_calisthenics_ai),
             modifier = Modifier.size(56.dp),
             tint = MaterialTheme.colorScheme.primary
         )
         Spacer(Modifier.height(18.dp))
-        Text("Calisthenics AI", style = MaterialTheme.typography.headlineLarge)
+        Text(stringResource(R.string.loc_calisthenics_ai), style = MaterialTheme.typography.headlineLarge)
         Text(
-            if (isRegistering) "Build your strongest practice." else "Train smarter. Move better.",
+            stringResource(if (isRegistering) R.string.auth_register_tagline else R.string.auth_login_tagline),
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(24.dp))
@@ -157,7 +158,7 @@ fun AuthScreen(
         // Saved accounts section
         if (state.savedAccounts.isNotEmpty() && !isRegistering && !isAddingAccount) {
             Text(
-                "Tài khoản đã lưu trên thiết bị",
+                stringResource(R.string.loc_saved_accounts_vietnamese),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -188,7 +189,7 @@ fun AuthScreen(
                     color = MaterialTheme.colorScheme.outlineVariant
                 )
                 Text(
-                    text = "HOẶC ĐĂNG NHẬP MỚI",
+                    text = stringResource(R.string.auth_or_sign_in_new),
                     modifier = Modifier.padding(horizontal = 14.dp),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -206,7 +207,7 @@ fun AuthScreen(
             OutlinedTextField(
                 name,
                 { name = it },
-                label = { Text("Full name") },
+                label = { Text(stringResource(R.string.full_name)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -215,7 +216,7 @@ fun AuthScreen(
         OutlinedTextField(
             email,
             { email = it },
-            label = { Text("Email") },
+            label = { Text(stringResource(R.string.email)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -223,7 +224,7 @@ fun AuthScreen(
         OutlinedTextField(
             password,
             { password = it },
-            label = { Text("Password") },
+            label = { Text(stringResource(R.string.password)) },
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
@@ -249,7 +250,7 @@ fun AuthScreen(
             if (state.loading) {
                 CircularProgressIndicator(Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
             } else {
-                Text(if (isRegistering) "Create account" else "Sign in")
+                Text(stringResource(if (isRegistering) R.string.auth_create_account else R.string.auth_sign_in))
             }
         }
 
@@ -266,7 +267,7 @@ fun AuthScreen(
                 color = MaterialTheme.colorScheme.outlineVariant
             )
             Text(
-                text = "OR",
+                text = stringResource(R.string.auth_or),
                 modifier = Modifier.padding(horizontal = 14.dp),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -290,7 +291,7 @@ fun AuthScreen(
                         viewModel.startGoogleSignIn(requestId)
                         when (val result = authManager.signIn(context, requestId)) {
                             is GoogleSignInResult.Success -> {
-                                viewModel.loginWithGoogle(result.idToken, requestId)
+                                viewModel.loginWithFirebase(result.idToken, requestId)
                             }
                             is GoogleSignInResult.Cancelled -> {
                                 viewModel.cancelGoogleSignIn(requestId)
@@ -318,27 +319,27 @@ fun AuthScreen(
                     color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(Modifier.width(10.dp))
-                Text("Signing in with Google...")
+                Text(stringResource(R.string.sign_in_google_loading))
             } else {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_google_logo),
-                    contentDescription = "Google",
+                    contentDescription = stringResource(R.string.loc_google),
                     modifier = Modifier.size(20.dp),
                     tint = Color.Unspecified
                 )
                 Spacer(Modifier.width(10.dp))
-                Text("Continue with Google")
+                Text(stringResource(R.string.continue_with_google))
             }
         }
 
         Spacer(Modifier.height(8.dp))
 
         TextButton(onClick = { isRegistering = !isRegistering }) {
-            Text(if (isRegistering) "Already have an account? Sign in" else "Create an account")
+            Text(stringResource(if (isRegistering) R.string.auth_already_have_account else R.string.auth_create_an_account))
         }
         if (!isRegistering) {
             TextButton(onClick = onForgotPassword) {
-                Text("Forgot password?")
+                Text(stringResource(R.string.forgot_password))
             }
         }
     }
@@ -346,8 +347,8 @@ fun AuthScreen(
     accountPendingRemoval?.let { account ->
         AlertDialog(
             onDismissRequest = { accountPendingRemoval = null },
-            title = { Text("Xóa tài khoản đã lưu?") },
-            text = { Text("Bạn có chắc chắn muốn xóa tài khoản ${account.email} khỏi thiết bị này?") },
+            title = { Text(stringResource(R.string.loc_delete_saved_account_vietnamese)) },
+            text = { Text(stringResource(R.string.loc_delete_saved_account_message_vietnamese, account.email)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -355,12 +356,12 @@ fun AuthScreen(
                         accountPendingRemoval = null
                     }
                 ) {
-                    Text("Xóa", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { accountPendingRemoval = null }) {
-                    Text("Hủy")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -369,8 +370,8 @@ fun AuthScreen(
     if (showAddGoogleAccountDialog) {
         AlertDialog(
             onDismissRequest = { showAddGoogleAccountDialog = false },
-            title = { Text("Thêm tài khoản Google") },
-            text = { Text("Chưa có tài khoản Google nào được thiết lập trên thiết bị. Bạn có muốn mở Cài đặt để thêm tài khoản Google không?") },
+            title = { Text(stringResource(R.string.loc_add_google_account_vietnamese)) },
+            text = { Text(stringResource(R.string.loc_saved_google_accounts_vietnamese)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -378,12 +379,12 @@ fun AuthScreen(
                         authManager.openAccountSettings(context)
                     }
                 ) {
-                    Text("Mở Cài đặt")
+                    Text(stringResource(R.string.loc_open_settings_vietnamese))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showAddGoogleAccountDialog = false }) {
-                    Text("Đóng")
+                    Text(stringResource(R.string.common_close))
                 }
             }
         )
@@ -435,7 +436,7 @@ private fun SavedAccountAuthCard(
                 IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
                     Icon(
                         Icons.Default.DeleteOutline,
-                        contentDescription = "Xóa",
+                        contentDescription = stringResource(R.string.common_delete),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.size(18.dp)
                     )

@@ -16,13 +16,15 @@ data class ClientProfileDto(
     @SerializedName("preferredFrequency") val preferredFrequency: String? = null,
     @SerializedName("coachingLanguage") val coachingLanguage: String? = null,
     @SerializedName("heightCm") val heightCm: Double? = null,
+    @SerializedName("weightKg") val weightKg: Double? = null,
     @SerializedName("activePlansCount") val activePlansCount: Long? = null,
     @SerializedName("completedSessionsCount") val completedSessionsCount: Long? = null,
     @SerializedName("currentPlanId") val currentPlanId: Long? = null,
     @SerializedName("currentPlanName") val currentPlanName: String? = null,
     @SerializedName("connectedCoach") val connectedCoach: ConnectedCoachSummaryDto? = null,
     @SerializedName("createdAt") val createdAt: String? = null,
-    @SerializedName("updatedAt") val updatedAt: String? = null
+    @SerializedName("updatedAt") val updatedAt: String? = null,
+    @SerializedName("gender") val gender: String? = null
 )
 
 data class ConnectedCoachSummaryDto(
@@ -32,7 +34,8 @@ data class ConnectedCoachSummaryDto(
     @SerializedName("coachExperienceLevel") val coachExperienceLevel: String? = null,
     @SerializedName("connectionStatus") val connectionStatus: String = "ACTIVE",
     @SerializedName("relationshipId") val relationshipId: Long? = null,
-    @SerializedName("conversationId") val conversationId: Long? = null
+    @SerializedName("conversationId") val conversationId: Long? = null,
+    @SerializedName("coachGender") val coachGender: String? = null
 )
 
 data class ClientProfileRequestDto(
@@ -45,7 +48,9 @@ data class ClientProfileRequestDto(
     @SerializedName("trainingInterests") val trainingInterests: String? = null,
     @SerializedName("preferredFrequency") val preferredFrequency: String? = null,
     @SerializedName("coachingLanguage") val coachingLanguage: String? = null,
-    @SerializedName("heightCm") val heightCm: Double? = null
+    @SerializedName("heightCm") val heightCm: Double? = null,
+    @SerializedName("weightKg") val weightKg: Double? = null,
+    @SerializedName("gender") val gender: String? = null
 )
 
 data class ClientTrainingOverviewDto(

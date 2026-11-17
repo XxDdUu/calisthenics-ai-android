@@ -68,11 +68,48 @@ class AuthViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.state.value.authenticated)
-        assertEquals(1, repository.googleLoginCalls)
+        assertEquals(1, repository.firebaseLoginCalls)
+    }
+
+    @Test fun successfulFirebaseLoginTransitionsToAuthenticated() = runTest {
+        val viewModel = AuthViewModel(repository)
+        viewModel.loginWithFirebase("valid-firebase-id-token", "req-fb")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.authenticated)
+        assertEquals(1, repository.firebaseLoginCalls)
+        assertEquals("valid-firebase-id-token", repository.lastFirebaseToken)
+    }
+
+    @Test fun failedFirebaseLoginDisplaysSafeErrorAndDoesNotAuthenticate() = runTest {
+        repository.firebaseLoginResult = Result.failure(IllegalStateException("expired firebase token"))
+        val viewModel = AuthViewModel(repository)
+        viewModel.loginWithFirebase("expired-token")
+        advanceUntilIdle()
+
+        assertEquals("Đăng nhập thất bại. Vui lòng thử lại.", viewModel.state.value.error)
+        assertEquals(false, viewModel.state.value.authenticated)
+        assertEquals(false, viewModel.state.value.loading)
+        assertEquals(1, repository.firebaseLoginCalls)
+    }
+
+    @Test fun logoutClearsRepositoryAuthAndGoogleFirebaseCredentialState() = runTest {
+        val googleAuthManager = io.mockk.mockk<GoogleAuthManager>(relaxed = true)
+        val viewModel = AuthViewModel(repository = repository, googleAuthManager = googleAuthManager)
+        viewModel.loginWithFirebase("valid-firebase-id-token")
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.authenticated)
+
+        viewModel.logout()
+        advanceUntilIdle()
+
+        assertEquals(false, viewModel.state.value.authenticated)
+        assertEquals(1, repository.clearAuthCalls)
+        io.mockk.coVerify(exactly = 1) { googleAuthManager.clearCredentialState() }
     }
 
     @Test fun failedGoogleLoginDisplaysSafeErrorAndDoesNotAuthenticate() = runTest {
-        repository.googleLoginResult = Result.failure(IllegalStateException("invalid token"))
+        repository.firebaseLoginResult = Result.failure(IllegalStateException("invalid token"))
         val viewModel = AuthViewModel(repository)
         viewModel.loginWithGoogle("bad-token")
         advanceUntilIdle()
@@ -80,7 +117,7 @@ class AuthViewModelTest {
         assertEquals("Đăng nhập thất bại. Vui lòng thử lại.", viewModel.state.value.error)
         assertEquals(false, viewModel.state.value.authenticated)
         assertEquals(false, viewModel.state.value.loading)
-        assertEquals(1, repository.googleLoginCalls)
+        assertEquals(1, repository.firebaseLoginCalls)
     }
 
     @Test fun setErrorMessageUpdatesErrorAndClearsLoading() {
@@ -233,6 +270,8 @@ class AuthViewModelTest {
     private class FakeAuthRepository : AuthRepository {
         var loginCalls = 0
         var googleLoginCalls = 0
+        var firebaseLoginCalls = 0
+        var lastFirebaseToken: String? = null
         var deactivateSessionCalls = 0
         var clearAuthCalls = 0
         var registerCalls = 0
@@ -240,6 +279,7 @@ class AuthViewModelTest {
         var resendRegistrationOtpCalls = 0
         var loginResult: Result<AuthToken>? = null
         var googleLoginResult: Result<AuthToken>? = null
+        var firebaseLoginResult: Result<AuthToken>? = null
         var registerResult: Result<RegistrationInitiation>? = null
         var verifyRegistrationOtpResult: Result<AuthToken>? = null
         var resendRegistrationOtpResult: Result<RegistrationInitiation>? = null
@@ -248,6 +288,12 @@ class AuthViewModelTest {
         override suspend fun login(email: String, password: String): Result<AuthToken> {
             loginCalls++
             return loginResult ?: Result.success(AuthToken("access", "refresh", 1, email, "Athlete"))
+        }
+
+        override suspend fun loginWithFirebase(idToken: String): Result<AuthToken> {
+            firebaseLoginCalls++
+            lastFirebaseToken = idToken
+            return firebaseLoginResult ?: Result.success(AuthToken("access", "refresh", 1, "firebase@example.com", "Athlete"))
         }
 
         override suspend fun loginWithGoogle(idToken: String): Result<AuthToken> {

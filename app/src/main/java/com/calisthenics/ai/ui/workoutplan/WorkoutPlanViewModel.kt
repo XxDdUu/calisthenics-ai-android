@@ -3,6 +3,8 @@ package com.calisthenics.ai.ui.workoutplan
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.calisthenics.ai.data.local.AccountSessionGuard
+import com.calisthenics.ai.data.local.AccountSessionManager
 import com.calisthenics.ai.domain.model.Exercise
 import com.calisthenics.ai.domain.model.PlannedExercise
 import com.calisthenics.ai.domain.model.PlannedWorkout
@@ -72,7 +74,8 @@ enum class WorkoutPlanTemplate(val label: String, val preview: String) {
 class WorkoutPlanViewModel @Inject constructor(
     private val workoutPlanRepository: WorkoutPlanRepository,
     private val getExercisesUseCase: GetExercisesUseCase,
-    private val savedStateHandle: SavedStateHandle
+    private val savedStateHandle: SavedStateHandle,
+    private val accountSessionManager: AccountSessionManager = AccountSessionManager()
 ) : ViewModel() {
     private val restoredSelectedDate = savedStateHandle.get<String>(SELECTED_DATE_KEY)
         ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
@@ -86,17 +89,38 @@ class WorkoutPlanViewModel @Inject constructor(
     )
     val uiState: StateFlow<WorkoutPlanUiState> = _uiState.asStateFlow()
 
+    private val sessionGuard = AccountSessionGuard(
+        parentScope = viewModelScope,
+        sessionManager = accountSessionManager,
+        onSessionCleared = {
+            _uiState.update {
+                WorkoutPlanUiState(
+                    isLoading = false,
+                    selectedDate = LocalDate.now(),
+                    weekStart = startOfWeek(LocalDate.now()),
+                    exercises = it.exercises
+                )
+            }
+        },
+        onSessionActive = { loadPlan() }
+    )
+
     init {
+        sessionGuard.startObserving()
         loadPlan()
         loadExerciseCatalog()
     }
 
     fun loadPlan() {
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             _uiState.update { it.copy(isLoading = true, planError = null) }
             workoutPlanRepository.getSnapshot()
-                .onSuccess(::applySnapshot)
+                .onSuccess { snapshot ->
+                    if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
+                    applySnapshot(snapshot)
+                }
                 .onFailure { error ->
+                    if (!sessionGuard.isCurrentSession(captured)) return@onFailure
                     _uiState.update {
                         it.copy(
                             isLoading = false,

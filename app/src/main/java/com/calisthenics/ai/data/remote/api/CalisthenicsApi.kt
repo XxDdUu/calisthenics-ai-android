@@ -1,17 +1,53 @@
 package com.calisthenics.ai.data.remote.api
 
+import com.calisthenics.ai.data.remote.dto.AdminGettingStartedProgramRequestDto
+import com.calisthenics.ai.data.remote.dto.GettingStartedEnrollmentResponseDto
+import com.calisthenics.ai.data.remote.dto.GettingStartedProgramResponseDto
+import com.calisthenics.ai.data.remote.dto.UpdateDismissalStatusRequestDto
+import com.calisthenics.ai.data.remote.dto.AiConversationDetailDto
+import com.calisthenics.ai.data.remote.dto.AiConversationSummaryDto
+import com.calisthenics.ai.data.remote.dto.AiMessageDto
+import com.calisthenics.ai.data.remote.dto.AiPerformanceSummaryDto
+import com.calisthenics.ai.data.remote.dto.CreateAiConversationRequestDto
+import com.calisthenics.ai.data.remote.dto.SendAiMessageRequestDto
+import com.calisthenics.ai.data.remote.dto.SharePrRequestDto
 import com.calisthenics.ai.data.remote.dto.AnalysisResponseDto
+import com.calisthenics.ai.data.remote.dto.AnalysisSessionResponseDto
+import com.calisthenics.ai.data.remote.dto.AnalysisHistorySummaryDto
+import com.calisthenics.ai.data.remote.dto.CompleteAnalysisSessionRequestDto
+import com.calisthenics.ai.data.remote.dto.CreateAnalysisSessionRequestDto
+import com.calisthenics.ai.data.remote.dto.RepHistoryDto
+import com.calisthenics.ai.data.remote.dto.VideoAnalysisResponseDto
+import com.calisthenics.ai.data.remote.dto.VideoAnalysisKeypointsDto
+import com.calisthenics.ai.data.remote.dto.AdminAiChatRequestDto
+import com.calisthenics.ai.data.remote.dto.AdminAiChatResponseDto
+import com.calisthenics.ai.data.remote.dto.AdminAiConversationSummaryDto
+import com.calisthenics.ai.data.remote.dto.AdminAiMessageDto
+import com.calisthenics.ai.data.remote.dto.AdminAiRecommendationDto
+import com.calisthenics.ai.data.remote.dto.AdminCoachClientStatisticsDto
 import com.calisthenics.ai.data.remote.dto.AdminDashboardDto
 import com.calisthenics.ai.data.remote.dto.AdminExerciseDeleteResponseDto
 import com.calisthenics.ai.data.remote.dto.AdminExerciseDto
+import com.calisthenics.ai.data.remote.dto.AdminGlobalUserStatisticsDto
+import com.calisthenics.ai.data.remote.dto.AdminGlobalUserSummaryDto
 import com.calisthenics.ai.data.remote.dto.AdminPageDto
+import com.calisthenics.ai.data.remote.dto.AdminPagedResultDto
+import com.calisthenics.ai.data.remote.dto.AdminPlatformEngagementDto
+import com.calisthenics.ai.data.remote.dto.AdminPlatformOverviewDto
+import com.calisthenics.ai.data.remote.dto.AdminTrainingAnalyticsDto
+import com.calisthenics.ai.data.remote.dto.AdminUserDetailDossierDto
 import com.calisthenics.ai.data.remote.dto.AdminUserDto
 import com.calisthenics.ai.data.remote.dto.AdminUserRoleDto
+import com.calisthenics.ai.data.remote.dto.AdminUserSegmentFilterRequestDto
+import com.calisthenics.ai.data.remote.dto.AdminUserSegmentsDto
 import com.calisthenics.ai.data.remote.dto.AdminWorkoutPlanDetailDto
 import com.calisthenics.ai.data.remote.dto.AdminWorkoutPlanDto
 import com.calisthenics.ai.data.remote.dto.AdminWorkoutSessionDetailDto
 import com.calisthenics.ai.data.remote.dto.AdminWorkoutSessionDto
+import com.calisthenics.ai.data.remote.dto.CreateAdminAiConversationRequestDto
 import com.calisthenics.ai.data.remote.dto.CreateAdminExerciseRequestDto
+import com.calisthenics.ai.data.remote.dto.CreateAdminRecommendationRequestDto
+import com.calisthenics.ai.data.remote.dto.ReviewAdminRecommendationRequestDto
 import com.calisthenics.ai.data.remote.dto.UpdateAdminExerciseRequestDto
 import com.calisthenics.ai.data.remote.dto.UpdateExerciseStatusRequestDto
 import com.calisthenics.ai.data.remote.dto.AuthResponseDto
@@ -23,6 +59,8 @@ import com.calisthenics.ai.data.remote.dto.CoachClientRelationshipDto
 import com.calisthenics.ai.data.remote.dto.CoachProfileDto
 import com.calisthenics.ai.data.remote.dto.CoachProfileRequestDto
 import com.calisthenics.ai.data.remote.dto.CreateClientCoachRequestDto
+import com.calisthenics.ai.data.remote.dto.WorkoutPlanAssignmentResponseDto
+import com.calisthenics.ai.data.remote.dto.WorkoutPlanAssignmentDto
 import com.calisthenics.ai.data.remote.dto.CreateWorkoutPlanRequestDto
 import com.calisthenics.ai.data.remote.dto.ExerciseResponseDto
 import com.calisthenics.ai.data.remote.dto.FileUploadResponseDto
@@ -30,6 +68,7 @@ import com.calisthenics.ai.data.remote.dto.GoogleLoginRequestDto
 import com.calisthenics.ai.data.remote.dto.LoginRequestDto
 import com.calisthenics.ai.data.remote.dto.LiveAnalysisResponseDto
 import com.calisthenics.ai.data.remote.dto.LiveExerciseCatalogDto
+import com.calisthenics.ai.data.remote.dto.FirebaseLoginRequestDto
 import com.calisthenics.ai.data.remote.dto.ForgotPasswordRequestDto
 import com.calisthenics.ai.data.remote.dto.ForgotPasswordResponseDto
 import com.calisthenics.ai.data.remote.dto.RegisterRequestDto
@@ -39,6 +78,10 @@ import com.calisthenics.ai.data.remote.dto.ResendRegistrationOtpRequestDto
 import com.calisthenics.ai.data.remote.dto.ResetPasswordRequestDto
 import com.calisthenics.ai.data.remote.dto.ResetPasswordResponseDto
 import com.calisthenics.ai.data.remote.dto.VerifyOtpRequestDto
+import com.calisthenics.ai.data.remote.dto.GenerateAiWorkoutPlanRequestDto
+import com.calisthenics.ai.data.remote.dto.ModifyAiWorkoutPlanRequestDto
+import com.calisthenics.ai.data.remote.dto.CommitAiWorkoutPlanRequestDto
+import com.calisthenics.ai.data.remote.dto.AiWorkoutPlanPreviewDto
 import com.calisthenics.ai.data.remote.dto.VerifyOtpResponseDto
 import com.calisthenics.ai.data.remote.dto.UpdateWorkoutPlanRequestDto
 import com.calisthenics.ai.data.remote.dto.UserProfileResponseDto
@@ -46,6 +89,8 @@ import com.calisthenics.ai.data.remote.dto.WorkoutDayExercisesBatchRequestDto
 import com.calisthenics.ai.data.remote.dto.WorkoutPlanExerciseRequestDto
 import com.calisthenics.ai.data.remote.dto.WorkoutPlanExerciseResponseDto
 import com.calisthenics.ai.data.remote.dto.WorkoutPlanResponseDto
+import com.calisthenics.ai.data.remote.dto.CreateWorkoutPlanAssignmentRequestDto
+import com.calisthenics.ai.data.remote.dto.UpdateWorkoutPlanAssignmentStatusRequestDto
 import com.calisthenics.ai.data.remote.dto.WorkoutPlanTemplateResponseDto
 import com.calisthenics.ai.data.remote.dto.TodayWorkoutResolutionResponseDto
 import com.calisthenics.ai.data.remote.dto.StartWorkoutSessionRequestDto
@@ -58,9 +103,13 @@ import com.calisthenics.ai.data.remote.dto.PersonalRecordDto
 import com.calisthenics.ai.data.remote.dto.CreatePrRequestDto
 import com.calisthenics.ai.data.remote.dto.UpdatePrRequestDto
 import com.calisthenics.ai.data.remote.dto.UpdateAdminUserRoleRequestDto
+import com.calisthenics.ai.data.remote.dto.UpdateGenderRequestDto
+import com.calisthenics.ai.data.remote.dto.UpdateUserProfileRequestDto
 import com.calisthenics.ai.data.remote.dto.SharedPersonalRecordDto
 import com.calisthenics.ai.data.remote.dto.BatchSharePrRequestDto
 import com.calisthenics.ai.data.remote.dto.NotificationDto
+import com.calisthenics.ai.data.remote.dto.ProfileMediaDto
+import com.calisthenics.ai.data.remote.dto.ReorderProfileMediaRequestDto
 import com.calisthenics.ai.data.remote.dto.UnreadCountDto
 import retrofit2.http.PATCH
 import com.calisthenics.ai.data.remote.dto.CoachFeedbackRequestDto
@@ -76,12 +125,14 @@ import com.calisthenics.ai.data.remote.dto.BodyMetricsHistoryDto
 import com.calisthenics.ai.data.remote.dto.CoachClientBodyMetricsDto
 import com.calisthenics.ai.data.remote.dto.RecordBodyMeasurementRequestDto
 import com.calisthenics.ai.data.remote.dto.UpdateHeightRequestDto
+import com.calisthenics.ai.data.remote.dto.*
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -114,6 +165,20 @@ interface CalisthenicsApi {
     suspend fun updateAdminUserRole(
         @Path("userId") userId: Long,
         @Body request: UpdateAdminUserRoleRequestDto
+    ): AdminUserDto
+
+    @POST("api/v1/admin/users/{userId}/pro/grant")
+    suspend fun grantAdminPro(
+        @Path("userId") userId: Long,
+        @Body request: com.calisthenics.ai.data.remote.dto.AdminProActionRequestDto =
+            com.calisthenics.ai.data.remote.dto.AdminProActionRequestDto()
+    ): AdminUserDto
+
+    @POST("api/v1/admin/users/{userId}/pro/revoke")
+    suspend fun revokeAdminPro(
+        @Path("userId") userId: Long,
+        @Body request: com.calisthenics.ai.data.remote.dto.AdminProActionRequestDto =
+            com.calisthenics.ai.data.remote.dto.AdminProActionRequestDto()
     ): AdminUserDto
 
     @GET("api/v1/admin/workout-plans")
@@ -170,6 +235,65 @@ interface CalisthenicsApi {
         @Query("softDelete") softDelete: Boolean
     ): AdminExerciseDeleteResponseDto
 
+    @GET("api/v1/admin/getting-started-program")
+    suspend fun getAdminGettingStartedProgram(): retrofit2.Response<GettingStartedProgramResponseDto>
+
+    @POST("api/v1/admin/getting-started-program")
+    suspend fun saveAdminGettingStartedProgram(
+        @Body request: AdminGettingStartedProgramRequestDto
+    ): GettingStartedProgramResponseDto
+
+    @POST("api/v1/admin/getting-started-program/publish")
+    suspend fun publishGettingStartedProgram(): GettingStartedProgramResponseDto
+
+    @POST("api/v1/admin/getting-started-program/unpublish")
+    suspend fun unpublishGettingStartedProgram(): GettingStartedProgramResponseDto
+
+    @DELETE("api/v1/admin/getting-started-program")
+    suspend fun deleteGettingStartedProgram(): retrofit2.Response<Unit>
+
+    @GET("api/v1/getting-started-program")
+    suspend fun getPublishedGettingStartedProgram(): retrofit2.Response<GettingStartedProgramResponseDto>
+
+    @PATCH("api/v1/getting-started-program/dismissal-status")
+    suspend fun updateGettingStartedDismissalStatus(
+        @Body request: UpdateDismissalStatusRequestDto
+    ): GettingStartedProgramResponseDto
+
+    @GET("api/v1/getting-started-program/enroll/preview")
+    suspend fun previewGettingStartedEnrollment(
+        @Query("startDate") startDate: String? = null
+    ): GettingStartedEnrollPreviewDto
+
+    @GET("api/v1/getting-started-program/enrollments")
+    suspend fun getGettingStartedEnrollments(): List<GettingStartedEnrollmentResponseDto>
+
+    @POST("api/v1/getting-started-program/enroll")
+    suspend fun enrollGettingStartedProgram(
+        @Body request: EnrollGettingStartedRequestDto = EnrollGettingStartedRequestDto()
+    ): GettingStartedEnrollmentResponseDto
+
+    @POST("api/v1/getting-started-program/days/{dayNumber}/start")
+    suspend fun startGettingStartedDay(
+        @Path("dayNumber") dayNumber: Int,
+        @Query("workoutDate") workoutDate: String? = null
+    ): WorkoutSessionResponseDto
+
+    @POST("api/v1/getting-started-program/complete-day/{dayNumber}")
+    suspend fun completeGettingStartedDay(
+        @Path("dayNumber") dayNumber: Int
+    ): GettingStartedEnrollmentResponseDto
+
+    @POST("api/v1/workout-sessions/{sessionId}/start")
+    suspend fun startScheduledWorkoutSession(
+        @Path("sessionId") sessionId: Long
+    ): WorkoutSessionResponseDto
+
+    @POST("api/v1/getting-started-program/events")
+    suspend fun recordGettingStartedCampaignEvent(
+        @Body request: GettingStartedCampaignEventRequestDto
+    ): retrofit2.Response<Unit>
+
     @GET("api/v1/exercises")
     suspend fun getExercises(): List<ExerciseResponseDto>
 
@@ -188,6 +312,43 @@ interface CalisthenicsApi {
 
     @GET("api/v1/analysis/live/exercises")
     suspend fun getLiveExercises(): LiveExerciseCatalogDto
+
+    @POST("api/v1/analysis/sessions")
+    suspend fun createAnalysisSession(
+        @Body request: CreateAnalysisSessionRequestDto
+    ): AnalysisSessionResponseDto
+
+    @POST("api/v1/analysis/sessions/{sessionId}/reps")
+    suspend fun recordRep(
+        @Path("sessionId") sessionId: String,
+        @Body rep: RepHistoryDto
+    ): AnalysisSessionResponseDto
+
+    @POST("api/v1/analysis/sessions/{sessionId}/complete")
+    suspend fun completeAnalysisSession(
+        @Path("sessionId") sessionId: String,
+        @Body request: CompleteAnalysisSessionRequestDto
+    ): AnalysisSessionResponseDto
+
+    @POST("api/v1/analysis/sessions/{sessionId}/ai-summary")
+    suspend fun generateAnalysisSessionAiSummary(
+        @Path("sessionId") sessionId: String
+    ): AiPerformanceSummaryDto
+
+    @GET("api/v1/analysis/sessions")
+    suspend fun getAnalysisSessions(
+        @Query("exerciseType") exerciseType: String? = null
+    ): List<AnalysisSessionResponseDto>
+
+    @GET("api/v1/analysis/sessions/{sessionId}")
+    suspend fun getAnalysisSessionDetails(
+        @Path("sessionId") sessionId: String
+    ): AnalysisSessionResponseDto
+
+    @GET("api/v1/analysis/sessions/summary")
+    suspend fun getAnalysisHistorySummary(
+        @Query("exerciseType") exerciseType: String? = null
+    ): AnalysisHistorySummaryDto
 
     @GET("api/v1/exercises/{id}")
     suspend fun getExerciseById(@Path("id") id: Long): ExerciseResponseDto
@@ -221,6 +382,9 @@ interface CalisthenicsApi {
     @POST("api/v1/auth/google")
     suspend fun authenticateWithGoogle(@Body request: GoogleLoginRequestDto): AuthResponseDto
 
+    @POST("api/v1/auth/firebase")
+    suspend fun authenticateWithFirebase(@Body request: FirebaseLoginRequestDto): AuthResponseDto
+
     @POST("api/v1/auth/register")
     suspend fun register(@Body request: RegisterRequestDto): RegisterInitiationResponseDto
 
@@ -247,6 +411,15 @@ interface CalisthenicsApi {
 
     @GET("api/v1/users/me")
     suspend fun getCurrentUser(): UserProfileResponseDto
+
+    @PUT("api/v1/users/me")
+    suspend fun updateCurrentUser(@Body request: UpdateUserProfileRequestDto): UserProfileResponseDto
+
+    @PATCH("api/v1/users/me/gender")
+    suspend fun updateCurrentUserGender(@Body request: UpdateGenderRequestDto): UserProfileResponseDto
+
+    @PATCH("api/v1/users/me/onboarding-status")
+    suspend fun updateCurrentUserOnboardingStatus(@Body request: UpdateOnboardingStatusRequestDto): UserProfileResponseDto
 
     @GET("api/v1/coaches/me")
     suspend fun getCoachProfileMe(): CoachProfileDto
@@ -291,6 +464,29 @@ interface CalisthenicsApi {
         @Query("displayOrder") displayOrder: Int? = null
     ): FileUploadResponseDto
 
+    @GET("api/v1/profile-media")
+    suspend fun getProfileMedia(
+        @Query("userId") userId: Long,
+        @Query("profileType") profileType: String
+    ): List<ProfileMediaDto>
+
+    @Multipart
+    @POST("api/v1/profile-media")
+    suspend fun uploadProfileMedia(
+        @Query("profileType") profileType: String,
+        @Part file: MultipartBody.Part,
+        @Part thumbnail: MultipartBody.Part? = null
+    ): ProfileMediaDto
+
+    @DELETE("api/v1/profile-media/{id}")
+    suspend fun deleteProfileMedia(@Path("id") id: Long): Response<Unit>
+
+    @PUT("api/v1/profile-media/reorder")
+    suspend fun reorderProfileMedia(@Body request: ReorderProfileMediaRequestDto): List<ProfileMediaDto>
+
+    @PATCH("api/v1/profile-media/{id}/cover")
+    suspend fun setProfileMediaCover(@Path("id") id: Long): List<ProfileMediaDto>
+
     @POST("api/v1/coach-client-relationships/requests")
     suspend fun requestCoachConnection(
         @Body request: CreateClientCoachRequestDto
@@ -310,6 +506,11 @@ interface CalisthenicsApi {
 
     @GET("api/v1/workout-plans")
     suspend fun getWorkoutPlans(): List<WorkoutPlanResponseDto>
+
+    @GET("api/v1/workout-plans/clients/{clientId}/personal")
+    suspend fun getClientPersonalWorkoutPlans(
+        @Path("clientId") clientId: Long
+    ): List<WorkoutPlanResponseDto>
 
     @GET("api/v1/workout-plans/today")
     suspend fun resolveTodayWorkout(
@@ -370,13 +571,35 @@ interface CalisthenicsApi {
         @Path("assignmentId") assignmentId: Long
     ): Response<Unit>
 
+    @POST("api/v1/ai/workout-plans/generate")
+    suspend fun generateAiWorkoutPlan(
+        @Body request: GenerateAiWorkoutPlanRequestDto
+    ): AiWorkoutPlanPreviewDto
+
+    @POST("api/v1/ai/workout-plans/modify")
+    suspend fun modifyAiWorkoutPlan(
+        @Body request: ModifyAiWorkoutPlanRequestDto
+    ): AiWorkoutPlanPreviewDto
+
+    @POST("api/v1/ai/workout-plans/commit")
+    suspend fun commitAiWorkoutPlan(
+        @Body request: CommitAiWorkoutPlanRequestDto
+    ): WorkoutPlanResponseDto
+
     @POST("api/v1/workout-sessions")
     suspend fun startOrResumeWorkoutSession(
         @Body request: StartWorkoutSessionRequestDto
     ): WorkoutSessionResponseDto
 
     @GET("api/v1/workout-sessions/active")
-    suspend fun getActiveWorkoutSessions(): List<WorkoutSessionResponseDto>
+    suspend fun getActiveWorkoutSessions(
+        @Query("localDate") localDate: String? = null
+    ): List<WorkoutSessionResponseDto>
+
+    @GET("api/v1/workout-sessions/upcoming")
+    suspend fun getUpcomingWorkoutSessions(
+        @Query("localDate") localDate: String? = null
+    ): List<WorkoutSessionResponseDto>
 
     @GET("api/v1/workout-sessions")
     suspend fun getWorkoutSessionHistory(
@@ -393,6 +616,19 @@ interface CalisthenicsApi {
         @Path("exerciseId") exerciseId: Long,
         @Path("setId") setId: Long,
         @Body request: UpdateWorkoutSessionSetRequestDto
+    ): WorkoutSessionResponseDto
+
+    @POST("api/v1/workout-sessions/{sessionId}/exercises/{exerciseId}/sets")
+    suspend fun addWorkoutSessionSet(
+        @Path("sessionId") sessionId: Long,
+        @Path("exerciseId") exerciseId: Long
+    ): WorkoutSessionResponseDto
+
+    @DELETE("api/v1/workout-sessions/{sessionId}/exercises/{exerciseId}/sets/{setId}")
+    suspend fun deleteWorkoutSessionSet(
+        @Path("sessionId") sessionId: Long,
+        @Path("exerciseId") exerciseId: Long,
+        @Path("setId") setId: Long
     ): WorkoutSessionResponseDto
 
     @PUT("api/v1/workout-sessions/{sessionId}/exercises/{exerciseId}")
@@ -443,6 +679,24 @@ interface CalisthenicsApi {
 
     @GET("api/v1/coach-client-relationships")
     suspend fun getCoachClientRelationships(): List<CoachClientRelationshipDto>
+
+    @POST("api/v1/coach-client-relationships/{relationshipId}/assignments")
+    suspend fun assignWorkoutPlan(
+        @Path("relationshipId") relationshipId: Long,
+        @Body request: CreateWorkoutPlanAssignmentRequestDto
+    ): WorkoutPlanAssignmentResponseDto
+
+    @GET("api/v1/coach/me/workout-plan-assignments")
+    suspend fun getMyCoachWorkoutPlanAssignments(): List<WorkoutPlanAssignmentDto>
+
+    @PATCH("api/v1/coach/assignments/{assignmentId}/status")
+    suspend fun updateWorkoutPlanAssignmentStatus(
+        @Path("assignmentId") assignmentId: Long,
+        @Body request: UpdateWorkoutPlanAssignmentStatusRequestDto
+    ): WorkoutPlanAssignmentDto
+
+    @GET("api/v1/clients/me/workout-plan-assignments")
+    suspend fun getMyWorkoutPlanAssignments(): List<WorkoutPlanAssignmentDto>
 
     // Training Analytics & Progress Tracking
     @GET("api/v1/analytics/overview")
@@ -539,7 +793,8 @@ interface CalisthenicsApi {
 
     @POST("api/v1/prs/{prId}/share")
     suspend fun sharePersonalRecord(
-        @Path("prId") prId: Long
+        @Path("prId") prId: Long,
+        @Body request: SharePrRequestDto? = null
     ): SharedPersonalRecordDto
 
     @GET("api/v1/clients/me/pr-shares")
@@ -561,7 +816,7 @@ interface CalisthenicsApi {
     @GET("api/v1/coach/clients/{clientId}/prs")
     suspend fun getCoachClientPRs(
         @Path("clientId") clientId: Long
-    ): List<PersonalRecordDto>
+    ): List<SharedPersonalRecordDto>
 
     @GET("api/v1/coach/clients/{clientId}/progress")
     suspend fun getCoachClientOverview(
@@ -584,7 +839,9 @@ interface CalisthenicsApi {
     // Notifications
     @GET("api/v1/notifications")
     suspend fun getNotifications(
-        @Query("unreadOnly") unreadOnly: Boolean? = null
+        @Query("unreadOnly") unreadOnly: Boolean? = null,
+        @Query("page") page: Int? = null,
+        @Query("size") size: Int? = null
     ): List<NotificationDto>
 
     @GET("api/v1/notifications/unread-count")
@@ -630,4 +887,280 @@ interface CalisthenicsApi {
         @Query("size") size: Int = 50,
         @Query("sort") sort: String = "asc"
     ): CoachClientBodyMetricsDto
+
+    // Video Analysis Endpoints
+    @Multipart
+    @POST("api/v1/video-analysis")
+    suspend fun uploadVideoForAnalysis(
+        @Header("Idempotency-Key") idempotencyKey: String? = null,
+        @Part video: MultipartBody.Part,
+        @Part("exerciseId") exerciseId: RequestBody? = null,
+        @Part("exerciseType") exerciseType: RequestBody? = null,
+        @Part("sideView") sideView: RequestBody? = null
+    ): VideoAnalysisResponseDto
+
+    @GET("api/v1/video-analysis/quota")
+    suspend fun getVideoAnalysisQuota(): QuotaEntitlementDto
+
+    @GET("api/v1/users/me/entitlements")
+    suspend fun getUserEntitlements(): QuotaEntitlementDto
+
+    @GET("api/v1/users/me/usage")
+    suspend fun getUserUsage(): UserUsageResponseDto
+
+    @PUT("api/v1/users/me/membership")
+    suspend fun updateMembershipTier(
+        @Body request: UpdateMembershipRequestDto
+    ): QuotaEntitlementDto
+
+    @GET("api/v1/video-analysis/{id}")
+    suspend fun getVideoAnalysisById(
+        @Path("id") id: Long
+    ): VideoAnalysisResponseDto
+
+    @GET("api/v1/video-analysis/{id}/keypoints")
+    suspend fun getVideoAnalysisKeypoints(
+        @Path("id") id: Long
+    ): VideoAnalysisKeypointsDto
+
+    @GET("api/v1/video-analysis/history")
+    suspend fun getVideoAnalysisHistory(): List<VideoAnalysisResponseDto>
+
+    // AI Assistant Endpoints
+    @GET("api/v1/ai/conversations")
+    suspend fun getAiConversations(): List<AiConversationSummaryDto>
+
+    @GET("api/v1/ai/conversations/latest")
+    suspend fun getLatestAiConversation(): retrofit2.Response<AiConversationSummaryDto?>
+
+    @POST("api/v1/ai/conversations")
+    suspend fun createAiConversation(
+        @Body request: CreateAiConversationRequestDto
+    ): AiConversationSummaryDto
+
+    @GET("api/v1/ai/conversations/{id}")
+    suspend fun getAiConversation(
+        @Path("id") id: Long
+    ): AiConversationDetailDto
+
+    @DELETE("api/v1/ai/conversations/{id}")
+    suspend fun deleteAiConversation(
+        @Path("id") id: Long
+    ): retrofit2.Response<Unit>
+
+    @POST("api/v1/ai/conversations/{id}/messages")
+    suspend fun sendAiMessage(
+        @Path("id") id: Long,
+        @Body request: SendAiMessageRequestDto
+    ): AiMessageDto
+
+    @POST("api/v1/ai/conversations/messages")
+    suspend fun sendQuickAiMessage(
+        @Body request: SendAiMessageRequestDto
+    ): AiMessageDto
+
+    // Dedicated Admin AI Agent Endpoints
+    @POST("api/v1/admin/ai/chat")
+    suspend fun sendAdminAiChat(
+        @Body request: AdminAiChatRequestDto
+    ): AdminAiChatResponseDto
+
+    @POST("api/v1/admin/ai/confirmations/{token}")
+    suspend fun resolveAdminAiConfirmation(
+        @Path("token") confirmationToken: String,
+        @Body request: AdminConfirmationDecisionRequestDto
+    ): AdminConfirmationDecisionResponseDto
+
+    @GET("api/v1/admin/ai/conversations")
+    suspend fun getAdminAiConversations(): List<AdminAiConversationSummaryDto>
+
+    @POST("api/v1/admin/ai/conversations")
+    suspend fun createAdminAiConversation(
+        @Body request: CreateAdminAiConversationRequestDto = CreateAdminAiConversationRequestDto()
+    ): AdminAiConversationSummaryDto
+
+    @GET("api/v1/admin/ai/conversations/{id}/messages")
+    suspend fun getAdminAiConversationMessages(
+        @Path("id") id: Long
+    ): List<AdminAiMessageDto>
+
+    @GET("api/v1/admin/ai/analytics/overview")
+    suspend fun getAdminAiPlatformOverview(
+        @Query("range") range: String = "LAST_30_DAYS",
+        @Query("startDate") startDate: String? = null,
+        @Query("endDate") endDate: String? = null
+    ): AdminPlatformOverviewDto
+
+    @GET("api/v1/admin/ai/analytics/training")
+    suspend fun getAdminAiTrainingAnalytics(
+        @Query("range") range: String = "LAST_30_DAYS",
+        @Query("startDate") startDate: String? = null,
+        @Query("endDate") endDate: String? = null
+    ): AdminTrainingAnalyticsDto
+
+    @GET("api/v1/admin/ai/recommendations")
+    suspend fun getAdminAiRecommendations(
+        @Query("type") type: String? = null,
+        @Query("status") status: String? = null
+    ): List<AdminAiRecommendationDto>
+
+    @POST("api/v1/admin/ai/recommendations")
+    suspend fun createAdminAiRecommendations(
+        @Body request: CreateAdminRecommendationRequestDto
+    ): List<AdminAiRecommendationDto>
+
+    @PATCH("api/v1/admin/ai/recommendations/{id}/approve")
+    suspend fun approveAdminAiRecommendation(
+        @Path("id") id: Long,
+        @Body request: ReviewAdminRecommendationRequestDto = ReviewAdminRecommendationRequestDto()
+    ): AdminAiRecommendationDto
+
+    @PATCH("api/v1/admin/ai/recommendations/{id}/reject")
+    suspend fun rejectAdminAiRecommendation(
+        @Path("id") id: Long,
+        @Body request: ReviewAdminRecommendationRequestDto = ReviewAdminRecommendationRequestDto()
+    ): AdminAiRecommendationDto
+
+    @PATCH("api/v1/admin/ai/recommendations/{id}/implement")
+    suspend fun implementAdminAiRecommendation(
+        @Path("id") id: Long,
+        @Body request: ReviewAdminRecommendationRequestDto = ReviewAdminRecommendationRequestDto()
+    ): AdminAiRecommendationDto
+
+    @GET("api/v1/admin/ai/analytics/users")
+    suspend fun getAdminAiGlobalUserStatistics(
+        @Query("range") range: String = "LAST_30_DAYS",
+        @Query("startDate") startDate: String? = null,
+        @Query("endDate") endDate: String? = null
+    ): AdminGlobalUserStatisticsDto
+
+    @GET("api/v1/admin/ai/users")
+    suspend fun getAdminAiGlobalUsers(
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20,
+        @Query("search") search: String? = null,
+        @Query("experienceLevel") experienceLevel: String? = null,
+        @Query("fitnessGoal") fitnessGoal: String? = null,
+        @Query("activityStatus") activityStatus: String? = null,
+        @Query("inactiveDaysThreshold") inactiveDaysThreshold: Int? = null,
+        @Query("maxCompletionRate") maxCompletionRate: Double? = null,
+        @Query("coachRelationshipStatus") coachRelationshipStatus: String? = null,
+        @Query("roleFilter") roleFilter: String? = null,
+        @Query("skillKeyword") skillKeyword: String? = null,
+        @Query("includeEmail") includeEmail: Boolean = false,
+        @Query("sortBy") sortBy: String? = null,
+        @Query("range") range: String = "LAST_30_DAYS",
+        @Query("startDate") startDate: String? = null,
+        @Query("endDate") endDate: String? = null
+    ): AdminPagedResultDto<AdminGlobalUserSummaryDto>
+
+    @GET("api/v1/admin/ai/users/{userId}")
+    suspend fun getAdminAiGlobalUserDetail(
+        @Path("userId") userId: Long,
+        @Query("includeEmail") includeEmail: Boolean = false,
+        @Query("range") range: String = "LAST_30_DAYS",
+        @Query("startDate") startDate: String? = null,
+        @Query("endDate") endDate: String? = null
+    ): AdminUserDetailDossierDto
+
+    @GET("api/v1/admin/ai/analytics/coaching")
+    suspend fun getAdminAiCoachClientStatistics(
+        @Query("range") range: String = "LAST_30_DAYS",
+        @Query("startDate") startDate: String? = null,
+        @Query("endDate") endDate: String? = null
+    ): AdminCoachClientStatisticsDto
+
+    @GET("api/v1/admin/ai/analytics/engagement")
+    suspend fun getAdminAiPlatformEngagement(
+        @Query("range") range: String = "LAST_30_DAYS",
+        @Query("startDate") startDate: String? = null,
+        @Query("endDate") endDate: String? = null
+    ): AdminPlatformEngagementDto
+
+    @POST("api/v1/admin/ai/analytics/segments")
+    suspend fun analyzeAdminAiUserSegments(
+        @Body filter: AdminUserSegmentFilterRequestDto
+    ): AdminUserSegmentsDto
+
+    // ---- Coach reviews ----
+    @GET("api/v1/coaches/{coachId}/reviews/summary")
+    suspend fun getCoachReviewSummary(@Path("coachId") coachId: Long): CoachReviewSummaryDto
+
+    @GET("api/v1/coaches/{coachId}/reviews")
+    suspend fun getCoachReviews(
+        @Path("coachId") coachId: Long,
+        @Query("page") page: Int,
+        @Query("size") size: Int
+    ): CoachReviewPageDto
+
+    @GET("api/v1/coaches/{coachId}/reviews/mine")
+    suspend fun getMyCoachReview(@Path("coachId") coachId: Long): MyReviewStatusDto
+
+    @POST("api/v1/coaches/{coachId}/reviews")
+    suspend fun createCoachReview(
+        @Path("coachId") coachId: Long,
+        @Body request: ReviewRequestDto
+    ): CoachReviewDto
+
+    @PUT("api/v1/coaches/{coachId}/reviews/mine")
+    suspend fun updateMyCoachReview(
+        @Path("coachId") coachId: Long,
+        @Body request: ReviewRequestDto
+    ): CoachReviewDto
+
+    @GET("api/v1/admin/reviews")
+    suspend fun getAdminReviews(
+        @Query("status") status: String?,
+        @Query("coachId") coachId: Long?,
+        @Query("page") page: Int,
+        @Query("size") size: Int
+    ): AdminPageDto<AdminReviewDto>
+
+    @GET("api/v1/admin/reviews/{id}")
+    suspend fun getAdminReview(@Path("id") id: Long): AdminReviewDto
+
+    @PUT("api/v1/admin/reviews/{id}/moderation")
+    suspend fun moderateAdminReview(
+        @Path("id") id: Long,
+        @Body request: ModerateReviewRequestDto
+    ): AdminReviewDto
+
+    // ---- User reports ----
+    @POST("api/v1/users/{userId}/reports")
+    suspend fun reportUser(
+        @Path("userId") userId: Long,
+        @Body request: CreateUserReportRequestDto
+    ): UserReportCreatedDto
+
+    @GET("api/v1/admin/user-reports/summary")
+    suspend fun getAdminUserReportSummary(): UserReportSummaryDto
+
+    @GET("api/v1/admin/user-reports")
+    suspend fun getAdminUserReports(
+        @Query("status") status: String?,
+        @Query("reportedUserId") reportedUserId: Long?,
+        @Query("page") page: Int,
+        @Query("size") size: Int
+    ): AdminPageDto<AdminUserReportDto>
+
+    @GET("api/v1/admin/user-reports/{id}")
+    suspend fun getAdminUserReport(@Path("id") id: Long): AdminUserReportDto
+
+    @PUT("api/v1/admin/user-reports/{id}/status")
+    suspend fun updateAdminUserReportStatus(
+        @Path("id") id: Long,
+        @Body request: UpdateReportStatusRequestDto
+    ): AdminUserReportDto
+
+    @POST("api/v1/admin/user-reports/{id}/notes")
+    suspend fun addAdminUserReportNote(
+        @Path("id") id: Long,
+        @Body request: AddReportNoteRequestDto
+    ): AdminUserReportDto
+
+    @POST("api/v1/admin/user-reports/{id}/actions")
+    suspend fun addAdminUserReportAction(
+        @Path("id") id: Long,
+        @Body request: ReportActionRequestDto
+    ): AdminUserReportDto
 }

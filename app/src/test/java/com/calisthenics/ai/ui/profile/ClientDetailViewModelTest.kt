@@ -38,6 +38,8 @@ class ClientDetailViewModelTest {
         userId = 2L,
         fullName = "Client Athlete",
         displayName = "Client Athlete",
+        heightCm = 177.0,
+        weightKg = 76.0,
         connectedCoach = ConnectedCoachSummary(
             relationshipId = 88L,
             coachId = 1L,
@@ -52,6 +54,7 @@ class ClientDetailViewModelTest {
         Dispatchers.setMain(dispatcher)
         coEvery { profileRepository.getClientProfile(2L) } returns Result.success(sampleClient)
         coEvery { profileRepository.getClientOverview(2L) } returns Result.success(ClientTrainingOverview(userId = 2L))
+        coEvery { profileRepository.getProfileMedia(any(), any()) } returns Result.success(emptyList())
     }
 
     @After
@@ -77,6 +80,39 @@ class ClientDetailViewModelTest {
         assertFalse(state.isLoading)
         assertEquals(88L, state.activeRelationshipId)
         assertEquals(sampleClient, state.clientProfile)
+        assertEquals(177.0, state.clientProfile?.heightCm)
+        assertEquals(76.0, state.clientProfile?.weightKg)
+    }
+
+    @Test
+    fun `loads client profile when height and weight are null`() = runTest {
+        val clientWithoutMetrics = sampleClient.copy(heightCm = null, weightKg = null)
+        coEvery { profileRepository.getClientProfile(2L) } returns Result.success(clientWithoutMetrics)
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isLoading)
+        assertEquals(clientWithoutMetrics, state.clientProfile)
+        assertEquals(null, state.clientProfile?.heightCm)
+        assertEquals(null, state.clientProfile?.weightKg)
+    }
+
+    @Test
+    fun `handles 403 forbidden error when coach is not assigned to client`() = runTest {
+        coEvery { profileRepository.getClientProfile(2L) } returns Result.failure(
+            IllegalStateException("403 Forbidden: Access denied")
+        )
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isLoading)
+        assertTrue(state.isForbidden)
+        assertEquals(null, state.clientProfile)
+        assertTrue(state.error?.contains("Only active coaches") == true)
     }
 
     @Test

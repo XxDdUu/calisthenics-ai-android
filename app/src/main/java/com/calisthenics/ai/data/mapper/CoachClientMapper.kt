@@ -26,7 +26,10 @@ fun CoachProfileDto.toDomain() = CoachProfile(
     assignedPlansCount = assignedPlansCount ?: 0L,
     connectionStatus = connectionStatus,
     relationshipId = relationshipId,
-    conversationId = conversationId
+    conversationId = conversationId,
+    gender = Gender.fromApi(gender),
+    averageRating = averageRating,
+    reviewCount = reviewCount
 )
 
 fun CoachClientRelationshipDto.toDomain() = CoachClientRelationship(
@@ -42,7 +45,9 @@ fun CoachClientRelationshipDto.toDomain() = CoachClientRelationship(
     requestedBy = requestedBy,
     status = status,
     createdAt = createdAt,
-    updatedAt = updatedAt
+    updatedAt = updatedAt,
+    coachGender = Gender.fromApi(coachGender),
+    clientGender = Gender.fromApi(clientGender)
 )
 
 fun ConnectedCoachSummaryDto.toDomain() = ConnectedCoachSummary(
@@ -52,7 +57,8 @@ fun ConnectedCoachSummaryDto.toDomain() = ConnectedCoachSummary(
     coachExperienceLevel = coachExperienceLevel,
     connectionStatus = connectionStatus,
     relationshipId = relationshipId,
-    conversationId = conversationId
+    conversationId = conversationId,
+    coachGender = Gender.fromApi(coachGender)
 )
 
 fun ClientProfileDto.toDomain() = ClientProfile(
@@ -73,7 +79,9 @@ fun ClientProfileDto.toDomain() = ClientProfile(
     currentPlanId = currentPlanId,
     currentPlanName = currentPlanName,
     heightCm = heightCm,
-    connectedCoach = connectedCoach?.toDomain()
+    weightKg = weightKg,
+    connectedCoach = connectedCoach?.toDomain(),
+    gender = Gender.fromApi(gender)
 )
 
 fun ClientTrainingOverviewDto.toDomain() = ClientTrainingOverview(

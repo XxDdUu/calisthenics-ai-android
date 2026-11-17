@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.calisthenics.ai.data.local.database.AppDatabase
 import com.calisthenics.ai.data.local.database.WorkoutScheduleDao
+import com.calisthenics.ai.data.local.database.WorkoutSessionDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -25,8 +26,11 @@ object DatabaseModule {
             AppDatabase::class.java,
             "calisthenics_ai.db"
         )
-            .addMigrations(AppDatabase.MIGRATION_1_2)
-            .fallbackToDestructiveMigration()
+            .addMigrations(
+                AppDatabase.MIGRATION_1_2,
+                AppDatabase.MIGRATION_2_3,
+                AppDatabase.MIGRATION_3_4
+            )
             .build()
     }
 
@@ -36,5 +40,13 @@ object DatabaseModule {
         database: AppDatabase
     ): WorkoutScheduleDao {
         return database.workoutScheduleDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideWorkoutSessionDao(
+        database: AppDatabase
+    ): WorkoutSessionDao {
+        return database.workoutSessionDao()
     }
 }

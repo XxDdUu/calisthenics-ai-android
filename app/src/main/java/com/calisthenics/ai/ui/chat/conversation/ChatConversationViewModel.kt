@@ -3,6 +3,8 @@ package com.calisthenics.ai.ui.chat.conversation
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.calisthenics.ai.data.local.AccountSessionGuard
+import com.calisthenics.ai.data.local.AccountSessionManager
 import com.calisthenics.ai.data.remote.websocket.WebSocketState
 import com.calisthenics.ai.domain.model.ChatMessage
 import com.calisthenics.ai.domain.model.MessageDeliveryStatus
@@ -39,7 +41,8 @@ data class ChatConversationUiState(
 @HiltViewModel
 class ChatConversationViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
-    savedStateHandle: SavedStateHandle
+    savedStateHandle: SavedStateHandle,
+    private val accountSessionManager: AccountSessionManager = AccountSessionManager()
 ) : ViewModel() {
 
     private val conversationId: Long = savedStateHandle.get<Long>("conversationId")
@@ -60,17 +63,62 @@ class ChatConversationViewModel @Inject constructor(
     val uiState: StateFlow<ChatConversationUiState> = _uiState.asStateFlow()
 
     private val pageSize = 40
+    private var initialOwnerUserId: Long? = accountSessionManager.currentUserId()
+        ?: chatRepository.getCurrentUserId()?.takeIf { it > 0L }
+    private var isConversationSessionActive = true
+
+    private val sessionGuard = AccountSessionGuard(
+        parentScope = viewModelScope,
+        sessionManager = accountSessionManager,
+        onSessionCleared = {
+            isConversationSessionActive = false
+            if (conversationId > 0) {
+                chatRepository.unsubscribeFromConversation(conversationId)
+            }
+            _uiState.value = ChatConversationUiState(
+                conversationId = 0L,
+                otherUserName = "Chat",
+                otherUserAvatarUrl = null,
+                otherUserId = 0L,
+                messages = emptyList(),
+                currentPage = 0,
+                hasMoreOlderMessages = false
+            )
+        },
+        onSessionActive = { newSession ->
+            // A conversation ID belongs strictly to a specific participant pair; never auto-reuse an
+            // earlier account's conversation unless this ViewModel hadn't bound an owner yet.
+            if (initialOwnerUserId == null || initialOwnerUserId == newSession.activeUserId) {
+                initialOwnerUserId = newSession.activeUserId
+                isConversationSessionActive = true
+                if (conversationId > 0) {
+                    _uiState.value = ChatConversationUiState(
+                        conversationId = conversationId,
+                        otherUserName = otherUserName,
+                        otherUserAvatarUrl = otherUserAvatarUrl,
+                        otherUserId = otherUserId
+                    )
+                    startConversationSession()
+                }
+            }
+        }
+    )
 
     init {
+        sessionGuard.startObserving()
         if (conversationId > 0) {
-            chatRepository.connectWebSocket()
-            chatRepository.subscribeToConversation(conversationId)
-            loadInitialMessages()
-            observeIncomingMessages()
-            loadPresence()
-            observePresenceUpdates()
-            observeWebSocketState()
+            startConversationSession()
         }
+    }
+
+    private fun startConversationSession() {
+        chatRepository.connectWebSocket()
+        chatRepository.subscribeToConversation(conversationId)
+        loadInitialMessages()
+        observeIncomingMessages()
+        loadPresence()
+        observePresenceUpdates()
+        observeWebSocketState()
     }
 
     override fun onCleared() {
@@ -81,10 +129,12 @@ class ChatConversationViewModel @Inject constructor(
     }
 
     fun loadInitialMessages() {
-        viewModelScope.launch {
+        if (!isConversationSessionActive || conversationId <= 0) return
+        sessionGuard.launchScoped { captured ->
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             chatRepository.getMessages(conversationId, page = 0, size = pageSize)
                 .onSuccess { msgs ->
+                    if (!sessionGuard.isCurrentSession(captured) || !isConversationSessionActive) return@onSuccess
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -98,6 +148,7 @@ class ChatConversationViewModel @Inject constructor(
                     markAsRead()
                 }
                 .onFailure { error ->
+                    if (!sessionGuard.isCurrentSession(captured) || !isConversationSessionActive) return@onFailure
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -110,16 +161,17 @@ class ChatConversationViewModel @Inject constructor(
 
     fun loadOlderMessages() {
         val state = _uiState.value
-        if (state.isLoadingOlder || !state.hasMoreOlderMessages || state.isLoading) {
+        if (!isConversationSessionActive || state.isLoadingOlder || !state.hasMoreOlderMessages || state.isLoading) {
             return
         }
 
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             val nextPage = state.currentPage + 1
             _uiState.update { it.copy(isLoadingOlder = true) }
 
             chatRepository.getMessages(conversationId, page = nextPage, size = pageSize)
                 .onSuccess { olderMsgs ->
+                    if (!sessionGuard.isCurrentSession(captured) || !isConversationSessionActive) return@onSuccess
                     _uiState.update { current ->
                         val existingIds = current.messages.map { it.id }.toSet()
                         val newOlder = olderMsgs.filter { it.id !in existingIds }
@@ -133,6 +185,7 @@ class ChatConversationViewModel @Inject constructor(
                     }
                 }
                 .onFailure {
+                    if (!sessionGuard.isCurrentSession(captured) || !isConversationSessionActive) return@onFailure
                     _uiState.update { it.copy(isLoadingOlder = false) }
                 }
         }
@@ -175,9 +228,10 @@ class ChatConversationViewModel @Inject constructor(
             )
         }
 
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             chatRepository.sendMessage(conversationId, trimmed, clientMsgId)
                 .onSuccess { sentMessage ->
+                    if (!sessionGuard.isCurrentSession(captured) || !isConversationSessionActive) return@onSuccess
                     _uiState.update { current ->
                         val updatedList = current.messages.map { msg ->
                             if (msg.clientMessageId == clientMsgId || msg.id == tempId) {
@@ -196,6 +250,7 @@ class ChatConversationViewModel @Inject constructor(
                     }
                 }
                 .onFailure { error ->
+                    if (!sessionGuard.isCurrentSession(captured) || !isConversationSessionActive) return@onFailure
                     _uiState.update { current ->
                         val updatedList = current.messages.map { msg ->
                             if (msg.clientMessageId == clientMsgId || msg.id == tempId) {
@@ -214,6 +269,7 @@ class ChatConversationViewModel @Inject constructor(
     }
 
     fun retryMessage(clientMessageId: String) {
+        if (!isConversationSessionActive) return
         val messageToRetry = _uiState.value.messages.firstOrNull {
             it.clientMessageId == clientMessageId && it.deliveryStatus == MessageDeliveryStatus.FAILED
         } ?: return
@@ -229,9 +285,10 @@ class ChatConversationViewModel @Inject constructor(
             current.copy(messages = updatedList, errorMessage = null)
         }
 
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             chatRepository.sendMessage(conversationId, messageToRetry.content, clientMessageId)
                 .onSuccess { sentMessage ->
+                    if (!sessionGuard.isCurrentSession(captured) || !isConversationSessionActive) return@onSuccess
                     _uiState.update { current ->
                         val updatedList = current.messages.map { msg ->
                             if (msg.clientMessageId == clientMessageId) {
@@ -250,6 +307,7 @@ class ChatConversationViewModel @Inject constructor(
                     }
                 }
                 .onFailure { error ->
+                    if (!sessionGuard.isCurrentSession(captured) || !isConversationSessionActive) return@onFailure
                     _uiState.update { current ->
                         val updatedList = current.messages.map { msg ->
                             if (msg.clientMessageId == clientMessageId) {
@@ -268,8 +326,9 @@ class ChatConversationViewModel @Inject constructor(
     }
 
     private fun observeIncomingMessages() {
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             chatRepository.getIncomingMessages().collect { incoming ->
+                if (!sessionGuard.isCurrentSession(captured) || !isConversationSessionActive) return@collect
                 if (incoming.conversationId == conversationId) {
                     _uiState.update { current ->
                         val existingIndex = current.messages.indexOfFirst {
@@ -295,10 +354,11 @@ class ChatConversationViewModel @Inject constructor(
     }
 
     private fun loadPresence() {
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             _uiState.update { it.copy(isPresenceLoading = true, presenceError = null) }
             chatRepository.getConversationPresence()
                 .onSuccess { presences ->
+                    if (!sessionGuard.isCurrentSession(captured) || !isConversationSessionActive) return@onSuccess
                     val targetPresence = presences.firstOrNull { it.userId == otherUserId }
                     _uiState.update { current ->
                         val existing = current.presence
@@ -316,6 +376,7 @@ class ChatConversationViewModel @Inject constructor(
                     }
                 }
                 .onFailure { throwable ->
+                    if (!sessionGuard.isCurrentSession(captured) || !isConversationSessionActive) return@onFailure
                     _uiState.update {
                         it.copy(
                             isPresenceLoading = false,
@@ -327,8 +388,9 @@ class ChatConversationViewModel @Inject constructor(
     }
 
     private fun observePresenceUpdates() {
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             chatRepository.getPresenceUpdates().collect { update ->
+                if (!sessionGuard.isCurrentSession(captured) || !isConversationSessionActive) return@collect
                 if (update.userId == otherUserId) {
                     _uiState.update { current ->
                         val existing = current.presence
@@ -344,9 +406,10 @@ class ChatConversationViewModel @Inject constructor(
     }
 
     private fun observeWebSocketState() {
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             var wasConnected = false
             chatRepository.getWebSocketState().collect { connectionState ->
+                if (!sessionGuard.isCurrentSession(captured) || !isConversationSessionActive) return@collect
                 _uiState.update { it.copy(webSocketState = connectionState) }
                 if (connectionState == WebSocketState.CONNECTED && !wasConnected) {
                     loadPresence()
@@ -357,7 +420,8 @@ class ChatConversationViewModel @Inject constructor(
     }
 
     fun markAsRead() {
-        viewModelScope.launch {
+        if (!isConversationSessionActive || conversationId <= 0) return
+        sessionGuard.launchScoped {
             chatRepository.markAsRead(conversationId)
         }
     }

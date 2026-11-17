@@ -66,9 +66,21 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindGettingStartedRepository(
+        impl: com.calisthenics.ai.data.repository.GettingStartedRepositoryImpl
+    ): com.calisthenics.ai.domain.repository.GettingStartedRepository
+
+    @Binds
+    @Singleton
     abstract fun bindChatRepository(
         impl: com.calisthenics.ai.data.repository.ChatRepositoryImpl
     ): com.calisthenics.ai.domain.repository.ChatRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAiChatRepository(
+        impl: com.calisthenics.ai.data.repository.AiChatRepositoryImpl
+    ): com.calisthenics.ai.domain.repository.AiChatRepository
 
     @Binds
     @Singleton
@@ -93,4 +105,16 @@ abstract class RepositoryModule {
     abstract fun bindBodyMetricsRepository(
         impl: com.calisthenics.ai.data.repository.BodyMetricsRepositoryImpl
     ): com.calisthenics.ai.domain.repository.BodyMetricsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindReviewRepository(
+        impl: com.calisthenics.ai.data.repository.ReviewRepositoryImpl
+    ): com.calisthenics.ai.domain.repository.ReviewRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindReportRepository(
+        impl: com.calisthenics.ai.data.repository.ReportRepositoryImpl
+    ): com.calisthenics.ai.domain.repository.ReportRepository
 }

@@ -2,9 +2,12 @@ package com.calisthenics.ai.ui.pr
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.calisthenics.ai.data.local.AccountSessionGuard
+import com.calisthenics.ai.data.local.AccountSessionManager
 import com.calisthenics.ai.data.remote.dto.*
 import com.calisthenics.ai.domain.model.Exercise
 import com.calisthenics.ai.domain.repository.AnalyticsRepository
+import com.calisthenics.ai.domain.repository.CoachClientRepository
 import com.calisthenics.ai.domain.repository.ExerciseRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,12 +17,19 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.UUID
 import javax.inject.Inject
 
 data class PersonalRecordsUiState(
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val prs: List<PersonalRecordDto> = emptyList(),
+    val sharedPrs: List<SharedPersonalRecordDto> = emptyList(),
+    val shareRecipients: List<ShareRecipientOption> = emptyList(),
+    val isLoadingRecipients: Boolean = false,
+    val sharingPr: PersonalRecordDto? = null,
+    val isSharingPr: Boolean = false,
+    val shareError: String? = null,
     val exercises: List<Exercise> = emptyList(),
     val selectedPrTypeFilter: String = "ALL",
     val selectedChartExerciseName: String? = null,
@@ -56,27 +66,50 @@ data class PersonalRecordsUiState(
 @HiltViewModel
 class PersonalRecordsViewModel @Inject constructor(
     private val analyticsRepository: AnalyticsRepository,
-    private val exerciseRepository: ExerciseRepository
+    private val exerciseRepository: ExerciseRepository,
+    private val coachClientRepository: CoachClientRepository? = null,
+    private val accountSessionManager: AccountSessionManager = AccountSessionManager()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PersonalRecordsUiState())
     val uiState: StateFlow<PersonalRecordsUiState> = _uiState.asStateFlow()
 
+    private val sessionGuard = AccountSessionGuard(
+        parentScope = viewModelScope,
+        sessionManager = accountSessionManager,
+        onSessionCleared = { _uiState.update { PersonalRecordsUiState(exercises = it.exercises) } },
+        onSessionActive = { loadData() }
+    )
+
     init {
+        sessionGuard.startObserving()
         loadData()
     }
 
     fun loadData() {
         _uiState.update { it.copy(isLoading = true, error = null) }
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             // Load exercises
             exerciseRepository.getExercises().onSuccess { exList ->
+                if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
                 _uiState.update { it.copy(exercises = exList) }
+            }
+
+            // Load existing PR shares & active recipients
+            analyticsRepository.getClientSharedPRs().onSuccess { shared ->
+                if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
+                _uiState.update { it.copy(sharedPrs = shared) }
+            }
+            coachClientRepository?.loadOverview()?.onSuccess { overview ->
+                if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
+                val recipients = overview.relationships.toShareRecipients(overview.currentUserId)
+                _uiState.update { it.copy(shareRecipients = recipients) }
             }
 
             // Load user PRs
             analyticsRepository.getUserPersonalRecords().fold(
                 onSuccess = { prList ->
+                    if (!sessionGuard.isCurrentSession(captured)) return@fold
                     val defaultChartExercise = prList.firstOrNull()?.exerciseName
                     val defaultChartExerciseId = prList.firstOrNull()?.exerciseId
                     _uiState.update {
@@ -90,6 +123,7 @@ class PersonalRecordsViewModel @Inject constructor(
                     loadChartProgression()
                 },
                 onFailure = { err ->
+                    if (!sessionGuard.isCurrentSession(captured)) return@fold
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -288,21 +322,82 @@ class PersonalRecordsViewModel @Inject constructor(
         }
     }
 
-    fun shareWithCoach(prId: Long) {
+    fun openShareSheet(pr: PersonalRecordDto) {
+        _uiState.update {
+            it.copy(
+                sharingPr = pr,
+                shareError = null,
+                isLoadingRecipients = it.shareRecipients.isEmpty() && coachClientRepository != null
+            )
+        }
         viewModelScope.launch {
-            analyticsRepository.sharePersonalRecord(prId).fold(
-                onSuccess = {
-                    _uiState.update { it.copy(successMessage = "PR shared with your coach!") }
+            analyticsRepository.getClientSharedPRs().onSuccess { shared ->
+                _uiState.update { it.copy(sharedPrs = shared) }
+            }
+            coachClientRepository?.loadOverview()
+                ?.onSuccess { overview ->
+                    val recipients = overview.relationships.toShareRecipients(overview.currentUserId)
+                    _uiState.update {
+                        it.copy(
+                            shareRecipients = recipients,
+                            isLoadingRecipients = false
+                        )
+                    }
+                }
+                ?.onFailure { err ->
+                    _uiState.update {
+                        it.copy(
+                            isLoadingRecipients = false,
+                            shareError = err.localizedMessage
+                        )
+                    }
+                }
+        }
+    }
+
+    fun dismissShareSheet() {
+        if (_uiState.value.isSharingPr) return
+        _uiState.update { it.copy(sharingPr = null, shareError = null) }
+    }
+
+    fun shareWithCoach(
+        prId: Long,
+        recipientId: Long? = null,
+        clientMessageId: String? = UUID.randomUUID().toString()
+    ) {
+        if (_uiState.value.isSharingPr) return
+        _uiState.update { it.copy(isSharingPr = true, shareError = null, error = null) }
+        viewModelScope.launch {
+            analyticsRepository.sharePersonalRecord(prId, recipientId, clientMessageId).fold(
+                onSuccess = { shared ->
+                    val recipientName = _uiState.value.shareRecipients
+                        .firstOrNull { it.userId == recipientId }?.name
+                        ?: shared.coachName.ifBlank { "your coach" }
+                    _uiState.update {
+                        it.copy(
+                            isSharingPr = false,
+                            sharingPr = null,
+                            sharedPrs = (it.sharedPrs + shared).distinctBy { s -> s.id },
+                            successMessage = "PR shared with $recipientName and sent to chat!"
+                        )
+                    }
                 },
                 onFailure = { err ->
-                    _uiState.update { it.copy(error = err.message ?: "Could not share PR with coach") }
+                    val msg = err.message ?: "Could not share PR"
+                    _uiState.update {
+                        it.copy(
+                            isSharingPr = false,
+                            shareError = msg,
+                            error = if (it.sharingPr == null) msg else null
+                        )
+                    }
                 }
             )
         }
     }
 
     fun clearMessages() {
-        _uiState.update { it.copy(error = null, successMessage = null) }
+        _uiState.update { it.copy(error = null, successMessage = null, shareError = null) }
     }
 }
 

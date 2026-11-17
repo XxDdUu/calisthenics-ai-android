@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.calisthenics.ai.data.local.TokenManager
+import com.calisthenics.ai.data.remote.api.NetworkErrorParser
 import com.calisthenics.ai.domain.model.AnalysisResult
 import com.calisthenics.ai.domain.model.KeypointFrameModel
 import com.calisthenics.ai.domain.usecase.GetAnalysisByIdUseCase
@@ -29,6 +30,7 @@ data class AnalysisResultUiState(
     val selectedVideoMode: VideoDisplayMode = VideoDisplayMode.ANNOTATED,
     val currentPlaybackPositionMs: Long = 0L,
     val currentKeypointFrame: KeypointFrameModel? = null,
+    val activeRepNumber: Int? = null,
     val showSkeletonOnOriginal: Boolean = true,
     val isFullscreen: Boolean = false
 )
@@ -85,7 +87,8 @@ class AnalysisResultViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            error = fetchResult.exceptionOrNull()?.localizedMessage ?: "Failed to retrieve analysis report"
+                            error = fetchResult.exceptionOrNull()?.let(NetworkErrorParser::toUserMessage)
+                                ?: "Failed to retrieve analysis report"
                         )
                     }
                     return@launch
@@ -135,15 +138,22 @@ class AnalysisResultViewModel @Inject constructor(
     }
 
     fun updatePlaybackPosition(positionMs: Long) {
-        val frames = _uiState.value.result?.keypointsData?.frames
+        val result = _uiState.value.result
+        val frames = result?.keypointsData?.frames
         val matchingFrame = if (!frames.isNullOrEmpty()) {
             frames.minByOrNull { abs(it.timestampMs - positionMs) }
         } else null
 
+        val matchingRep = result?.reps?.firstOrNull { rep ->
+            val endMs = rep.endTimestampMs ?: (rep.startTimestampMs + (rep.durationMs ?: 0L))
+            positionMs in rep.startTimestampMs..endMs
+        }
+
         _uiState.update {
             it.copy(
                 currentPlaybackPositionMs = positionMs,
-                currentKeypointFrame = matchingFrame ?: it.currentKeypointFrame
+                currentKeypointFrame = matchingFrame ?: it.currentKeypointFrame,
+                activeRepNumber = matchingRep?.repNumber
             )
         }
     }

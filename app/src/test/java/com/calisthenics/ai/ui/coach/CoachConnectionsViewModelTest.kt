@@ -31,6 +31,8 @@ class CoachConnectionsViewModelTest {
     private lateinit var repository: FakeCoachClientRepository
     private lateinit var viewModel: CoachConnectionsViewModel
     private val analyticsRepository: AnalyticsRepository = mockk {
+        coEvery { getCoachSharedPRs(any()) } returns Result.success(emptyList())
+        coEvery { getClientSharedPRs() } returns Result.success(emptyList())
         coEvery { getClientFeedbacks() } returns Result.success(emptyList())
     }
 
@@ -319,6 +321,120 @@ class CoachConnectionsViewModelTest {
         assertEquals(1, viewModel.uiState.value.myCoaches.size)
         assertEquals("Something went wrong. Please try again.", viewModel.uiState.value.feedback)
         assertTrue(viewModel.uiState.value.busyRelationshipIds.isEmpty())
+    }
+
+    @Test
+    fun terminatingRelationshipRemovesItsAssignmentsAndFiltersCancelledFromOptions() = runTest {
+        val coachRel = activeRelationship.copy(
+            id = 15L,
+            coachId = 10L,
+            coachName = "Current user (Coach)",
+            clientId = 50L,
+            clientName = "Client 50"
+        )
+        val otherRel = coachRel.copy(id = 16L, clientId = 51L, clientName = "Client 51")
+        val plan = com.calisthenics.ai.domain.model.UserWorkoutPlan(
+            id = 1L,
+            name = "Plan",
+            splitType = com.calisthenics.ai.domain.model.WorkoutSplitType.PPL,
+            isActive = true
+        )
+        val assignmentForTerminatedRel = com.calisthenics.ai.domain.model.WorkoutPlanAssignment(
+            id = 101L,
+            coachName = "Current user (Coach)",
+            startDate = "2026-10-01",
+            createdAt = "2026-10-01T00:00:00Z",
+            workoutPlan = plan,
+            status = com.calisthenics.ai.domain.model.WorkoutPlanAssignmentStatus.ACTIVE,
+            relationshipId = 15L
+        )
+        val assignmentForOtherRel = assignmentForTerminatedRel.copy(
+            id = 102L,
+            relationshipId = 16L
+        )
+        val alreadyCancelledAssignment = assignmentForTerminatedRel.copy(
+            id = 103L,
+            relationshipId = 16L,
+            status = com.calisthenics.ai.domain.model.WorkoutPlanAssignmentStatus.CANCELLED
+        )
+        val workoutPlanRepo: com.calisthenics.ai.domain.repository.WorkoutPlanRepository = mockk(relaxed = true)
+        coEvery { workoutPlanRepo.getPlans() } returns Result.success(listOf(plan))
+        coEvery { workoutPlanRepo.getMyCoachAssignments() } returnsMany listOf(
+            Result.success(listOf(assignmentForTerminatedRel, assignmentForOtherRel, alreadyCancelledAssignment)),
+            Result.success(listOf(assignmentForOtherRel))
+        )
+
+        repository.overview = Result.success(overview(relationships = listOf(coachRel, otherRel)))
+        viewModel = CoachConnectionsViewModel(
+            repository = repository,
+            chatRepository = mockk<ChatRepository>(relaxed = true),
+            analyticsRepository = analyticsRepository,
+            workoutPlanRepository = workoutPlanRepo
+        )
+        advanceUntilIdle()
+
+        viewModel.loadAssignmentOptions()
+        advanceUntilIdle()
+        assertEquals(listOf(101L, 102L), viewModel.uiState.value.coachAssignments.map { it.id })
+
+        repository.terminateResult = Result.success(coachRel.copy(status = "TERMINATED"))
+        viewModel.terminateRelationship(15L)
+        advanceUntilIdle()
+
+        assertEquals(listOf(102L), viewModel.uiState.value.coachAssignments.map { it.id })
+        assertEquals(listOf(otherRel), viewModel.uiState.value.myClients)
+    }
+
+    @Test
+    fun prFeedbackLoadsCoachSharedPrsAndFiltersOutUnrelatedCoachRecords() = runTest {
+        val myCoachShare = com.calisthenics.ai.data.remote.dto.SharedPersonalRecordDto(
+            id = 501L,
+            personalRecord = com.calisthenics.ai.data.remote.dto.PersonalRecordDto(
+                id = 901L,
+                exerciseName = "Weighted Pull-up",
+                recordType = "MAX_WEIGHT",
+                recordValue = 40.0,
+                unit = "kg",
+                achievedAt = "2026-11-10T10:00:00Z"
+            ),
+            clientUserId = 30L,
+            clientName = "Client 30",
+            coachUserId = 10L, // Current user is Coach 10
+            coachName = "Current Coach",
+            sharedAt = "2026-11-10T11:00:00Z",
+            isRead = false
+        )
+        val otherCoachShare = myCoachShare.copy(
+            id = 502L,
+            coachUserId = 999L, // Shared with a different coach
+            coachName = "Other Coach"
+        )
+
+        coEvery { analyticsRepository.getCoachSharedPRs(any()) } returns Result.success(
+            listOf(myCoachShare, otherCoachShare)
+        )
+        coEvery { analyticsRepository.getClientSharedPRs() } returns Result.success(emptyList())
+
+        createViewModel(Result.success(overview()))
+
+        // Only the PR shared with currentUserId (10L) is displayed
+        assertEquals(listOf(myCoachShare), viewModel.uiState.value.clientFeedbacks)
+        assertEquals(1, viewModel.uiState.value.unreadFeedbackCount)
+
+        // Marking as read updates state
+        val readShare = myCoachShare.copy(isRead = true)
+        coEvery { analyticsRepository.markPrShareAsRead(501L) } returns Result.success(readShare)
+        viewModel.markPrShareAsRead(501L)
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.clientFeedbacks.single().isRead)
+
+        // Submitting feedback updates state
+        val reviewedShare = readShare.copy(coachFeedback = "Solid pull!", rating = 5, status = "REVIEWED")
+        coEvery { analyticsRepository.addCoachFeedback(501L, "Solid pull!", 5) } returns Result.success(reviewedShare)
+        viewModel.submitCoachPrFeedback(501L, "Solid pull!", 5)
+        advanceUntilIdle()
+        assertEquals("Solid pull!", viewModel.uiState.value.clientFeedbacks.single().coachFeedback)
+        assertEquals(5, viewModel.uiState.value.clientFeedbacks.single().rating)
     }
 
     private fun overview(

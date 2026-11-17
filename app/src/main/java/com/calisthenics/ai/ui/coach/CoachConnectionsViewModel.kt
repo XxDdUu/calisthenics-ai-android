@@ -4,13 +4,20 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.JsonParseException
 import com.google.gson.JsonParser
+import com.calisthenics.ai.data.local.AccountSessionGuard
+import com.calisthenics.ai.data.local.AccountSessionManager
 import com.calisthenics.ai.data.remote.dto.SharedPersonalRecordDto
 import com.calisthenics.ai.domain.model.CoachClientRelationship
 import com.calisthenics.ai.domain.model.CoachConnectionOverview
 import com.calisthenics.ai.domain.model.CoachProfile
+import com.calisthenics.ai.domain.model.ProfileMediaItem
+import com.calisthenics.ai.domain.model.ProfileType
+import com.calisthenics.ai.domain.model.UserWorkoutPlan
 import com.calisthenics.ai.domain.repository.AnalyticsRepository
 import com.calisthenics.ai.domain.repository.ChatRepository
 import com.calisthenics.ai.domain.repository.CoachClientRepository
+import com.calisthenics.ai.domain.repository.ProfileRepository
+import com.calisthenics.ai.domain.repository.WorkoutPlanRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,6 +54,15 @@ data class CoachConnectionsUiState(
     val requestingCoachIds: Set<Long> = emptySet(),
     val busyRelationshipIds: Set<Long> = emptySet(),
     val busyChatUserIds: Set<Long> = emptySet(),
+    val coachMedia: List<ProfileMediaItem> = emptyList(),
+    val isCoachMediaLoading: Boolean = false,
+    val assignmentPlans: List<UserWorkoutPlan> = emptyList(),
+    val coachAssignments: List<com.calisthenics.ai.domain.model.WorkoutPlanAssignment> = emptyList(),
+    val isAssignmentSheetLoading: Boolean = false,
+    val isAssigningWorkout: Boolean = false,
+    val assignmentError: String? = null,
+    val feedbackSubmittingIds: Set<Long> = emptySet(),
+    val feedbackSectionError: String? = null,
     val error: String? = null,
     val profileError: String? = null,
     val feedback: String? = null
@@ -55,10 +71,16 @@ data class CoachConnectionsUiState(
         isRefreshing || section in refreshingSections
 
     val myCoaches: List<CoachClientRelationship>
-        get() = relationships.filter { it.status == "ACTIVE" && it.clientId == currentUserId }
+        get() = relationships.filter {
+            (it.status.equals("ACTIVE", ignoreCase = true) || it.status.equals("CONNECTED", ignoreCase = true)) &&
+                it.clientId == currentUserId
+        }
 
     val myClients: List<CoachClientRelationship>
-        get() = relationships.filter { it.status == "ACTIVE" && it.coachId == currentUserId }
+        get() = relationships.filter {
+            (it.status.equals("ACTIVE", ignoreCase = true) || it.status.equals("CONNECTED", ignoreCase = true)) &&
+                it.coachId == currentUserId
+        }
 
     val sentRequests: List<CoachClientRelationship>
         get() = relationships.filter { it.status == "PENDING" && it.requestedBy == currentUserId }
@@ -79,7 +101,10 @@ data class CoachConnectionsUiState(
 class CoachConnectionsViewModel @Inject constructor(
     private val repository: CoachClientRepository,
     private val chatRepository: ChatRepository,
-    private val analyticsRepository: AnalyticsRepository
+    private val analyticsRepository: AnalyticsRepository,
+    private val profileRepository: ProfileRepository? = null,
+    private val accountSessionManager: AccountSessionManager = AccountSessionManager(),
+    private val workoutPlanRepository: WorkoutPlanRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CoachConnectionsUiState())
@@ -87,7 +112,22 @@ class CoachConnectionsViewModel @Inject constructor(
     private var overviewRefreshJob: Job? = null
     private var relationshipMutationVersion = 0
 
+    private val sessionGuard = AccountSessionGuard(
+        parentScope = viewModelScope,
+        sessionManager = accountSessionManager,
+        onSessionCleared = {
+            overviewRefreshJob?.cancel()
+            overviewRefreshJob = null
+            relationshipMutationVersion++
+            _uiState.value = CoachConnectionsUiState()
+        },
+        onSessionActive = {
+            refresh()
+        }
+    )
+
     init {
+        sessionGuard.startObserving()
         refresh()
     }
 
@@ -97,7 +137,7 @@ class CoachConnectionsViewModel @Inject constructor(
             _uiState.value.requestingCoachIds.isNotEmpty()
         ) return
 
-        overviewRefreshJob = viewModelScope.launch {
+        overviewRefreshJob = sessionGuard.launchScoped { captured ->
             val requestedMutationVersion = relationshipMutationVersion
             val isRefresh = _uiState.value.hasLoaded
             _uiState.update {
@@ -110,9 +150,12 @@ class CoachConnectionsViewModel @Inject constructor(
                 )
             }
             repository.loadOverview()
-                .onSuccess { overview -> applyOverview(overview, requestedMutationVersion) }
+                .onSuccess { overview ->
+                    if (!sessionGuard.isCurrentSession(captured)) return@onSuccess
+                    applyOverview(overview, requestedMutationVersion)
+                }
                 .onFailure { throwable ->
-                    if (requestedMutationVersion != relationshipMutationVersion) return@onFailure
+                    if (!sessionGuard.isCurrentSession(captured) || requestedMutationVersion != relationshipMutationVersion) return@onFailure
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -238,11 +281,15 @@ class CoachConnectionsViewModel @Inject constructor(
                 selectedProfile = loadedProfile ?: it.selectedProfile,
                 selectedProfileId = id,
                 isProfileLoading = loadedProfile == null,
+                isCoachMediaLoading = true,
                 profileError = null
             )
         }
 
         viewModelScope.launch {
+            profileRepository?.getProfileMedia(id, ProfileType.COACH)?.onSuccess { media ->
+                _uiState.update { it.copy(coachMedia = media, isCoachMediaLoading = false) }
+            }
             repository.getCoachProfile(id)
                 .onSuccess { profile ->
                     _uiState.update {
@@ -326,7 +373,17 @@ class CoachConnectionsViewModel @Inject constructor(
             repository.terminateRelationship(relationshipId)
                 .onSuccess { relationship ->
                     addOrReplace(relationship)
-                    _uiState.update { it.copy(feedback = "Relationship ended.") }
+                    val refreshedAssignments = workoutPlanRepository
+                        ?.runCatching { getMyCoachAssignments().getOrNull() }
+                        ?.getOrNull()
+                        ?.filterNot { it.status.isCancelledOrEnded }
+                    _uiState.update { state ->
+                        state.copy(
+                            coachAssignments = refreshedAssignments
+                                ?: state.coachAssignments.filterNot { it.relationshipId == relationshipId },
+                            feedback = "Relationship ended."
+                        )
+                    }
                     onCompleted?.invoke(true)
                 }
                 .onFailure { throwable ->
@@ -360,6 +417,69 @@ class CoachConnectionsViewModel @Inject constructor(
 
     fun clearFeedback() {
         _uiState.update { it.copy(feedback = null) }
+    }
+
+    fun loadAssignmentOptions() {
+        val repository = workoutPlanRepository ?: return
+        if (_uiState.value.isAssignmentSheetLoading || _uiState.value.isAssigningWorkout) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isAssignmentSheetLoading = true, assignmentError = null) }
+            val plans = repository.getPlans()
+            val assignments = repository.getMyCoachAssignments()
+            val error = plans.exceptionOrNull() ?: assignments.exceptionOrNull()
+            _uiState.update {
+                it.copy(
+                    assignmentPlans = plans.getOrDefault(emptyList()).filter { plan -> plan.isActive },
+                    coachAssignments = assignments.getOrDefault(emptyList())
+                        .filterNot { assignment -> assignment.status.isCancelledOrEnded },
+                    isAssignmentSheetLoading = false,
+                    assignmentError = error?.localizedMessage
+                        ?: if (plans.isFailure || assignments.isFailure) {
+                            "Could not load assignment options."
+                        } else null
+                )
+            }
+        }
+    }
+
+    fun assignWorkout(relationshipId: Long, planId: Long, onSuccess: () -> Unit) {
+        val repository = workoutPlanRepository ?: return
+        if (_uiState.value.isAssigningWorkout) return
+        val client = _uiState.value.myClients.firstOrNull {
+            it.id == relationshipId || it.clientId == relationshipId
+        } ?: run {
+            _uiState.update { it.copy(assignmentError = "This athlete is not connected to your account.") }
+            return
+        }
+        if (_uiState.value.assignmentPlans.none { it.id == planId && it.isActive }) {
+            _uiState.update { it.copy(assignmentError = "This workout plan is not available.") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isAssigningWorkout = true, assignmentError = null) }
+            repository.assignPlanToClient(client.id, planId)
+                .onSuccess {
+                    val assignments = repository.getMyCoachAssignments()
+                    _uiState.update {
+                        it.copy(
+                            isAssigningWorkout = false,
+                            coachAssignments = assignments.getOrDefault(it.coachAssignments)
+                                .filterNot { assignment -> assignment.status.isCancelledOrEnded },
+                            feedback = "Workout assigned successfully.",
+                            assignmentError = assignments.exceptionOrNull()?.localizedMessage
+                        )
+                    }
+                    onSuccess()
+                }
+                .onFailure { throwable ->
+                    _uiState.update {
+                        it.copy(
+                            isAssigningWorkout = false,
+                            assignmentError = com.calisthenics.ai.data.remote.api.NetworkErrorParser.toUserMessage(throwable)
+                        )
+                    }
+                }
+        }
     }
 
     private fun updateRequest(
@@ -425,28 +545,111 @@ class CoachConnectionsViewModel @Inject constructor(
             )
         }
         viewModelScope.launch {
-            analyticsRepository.getClientFeedbacks()
-                .onSuccess { feedbacks ->
-                    _uiState.update { it.copy(clientFeedbacks = feedbacks) }
-                }
+            loadSharedPrFeedbacks(overview.currentUserId)
         }
     }
 
     fun refreshFeedbacks() {
         if (CoachSection.FEEDBACK in _uiState.value.refreshingSections) return
-        _uiState.update { it.copy(refreshingSections = it.refreshingSections + CoachSection.FEEDBACK) }
+        _uiState.update {
+            it.copy(
+                refreshingSections = it.refreshingSections + CoachSection.FEEDBACK,
+                feedbackSectionError = null
+            )
+        }
         viewModelScope.launch {
-            analyticsRepository.getClientFeedbacks()
-                .onSuccess { feedbacks ->
-                    _uiState.update {
-                        it.copy(
-                            clientFeedbacks = feedbacks,
-                            refreshingSections = it.refreshingSections - CoachSection.FEEDBACK
+            val currentUserId = _uiState.value.currentUserId
+            loadSharedPrFeedbacks(currentUserId, isExplicitRefresh = true)
+        }
+    }
+
+    private suspend fun loadSharedPrFeedbacks(
+        currentUserId: Long?,
+        isExplicitRefresh: Boolean = false
+    ) {
+        val coachSharesResult = analyticsRepository.getCoachSharedPRs()
+        val clientSharesResult = analyticsRepository.getClientSharedPRs()
+            .recoverCatching { analyticsRepository.getClientFeedbacks().getOrThrow() }
+
+        val coachShares = coachSharesResult.getOrDefault(emptyList())
+            .filter { currentUserId == null || it.coachUserId == 0L || it.coachUserId == currentUserId }
+        val clientShares = clientSharesResult.getOrDefault(emptyList())
+            .filter { currentUserId == null || it.clientUserId == 0L || it.clientUserId == currentUserId }
+
+        val merged = (coachShares + clientShares)
+            .distinctBy { it.id }
+            .sortedByDescending { it.sharedAt.ifBlank { it.feedbackAt.orEmpty() } }
+
+        val bothFailed = coachSharesResult.isFailure && clientSharesResult.isFailure
+        val errorMessage = if (bothFailed) {
+            userMessage(coachSharesResult.exceptionOrNull() ?: clientSharesResult.exceptionOrNull() ?: RuntimeException())
+        } else {
+            null
+        }
+
+        _uiState.update { state ->
+            state.copy(
+                clientFeedbacks = if (bothFailed && state.clientFeedbacks.isNotEmpty()) state.clientFeedbacks else merged,
+                feedbackSectionError = errorMessage,
+                refreshingSections = if (isExplicitRefresh) {
+                    state.refreshingSections - CoachSection.FEEDBACK
+                } else {
+                    state.refreshingSections
+                }
+            )
+        }
+    }
+
+    fun markPrShareAsRead(shareId: Long) {
+        val currentUserId = _uiState.value.currentUserId
+        val target = _uiState.value.clientFeedbacks.firstOrNull { it.id == shareId } ?: return
+        if (target.isRead) return
+        if (currentUserId != null && target.coachUserId != 0L && target.coachUserId != currentUserId) return
+
+        viewModelScope.launch {
+            analyticsRepository.markPrShareAsRead(shareId)
+                .onSuccess { updated ->
+                    _uiState.update { state ->
+                        state.copy(
+                            clientFeedbacks = state.clientFeedbacks.map {
+                                if (it.id == updated.id) updated else it
+                            }
                         )
                     }
                 }
-                .onFailure {
-                    _uiState.update { it.copy(refreshingSections = it.refreshingSections - CoachSection.FEEDBACK) }
+        }
+    }
+
+    fun submitCoachPrFeedback(shareId: Long, feedbackText: String, rating: Int? = null) {
+        val trimmed = feedbackText.trim()
+        if (trimmed.isEmpty() || shareId in _uiState.value.feedbackSubmittingIds) return
+
+        _uiState.update {
+            it.copy(
+                feedbackSubmittingIds = it.feedbackSubmittingIds + shareId,
+                feedback = null
+            )
+        }
+        viewModelScope.launch {
+            analyticsRepository.addCoachFeedback(shareId, trimmed, rating)
+                .onSuccess { updated ->
+                    _uiState.update { state ->
+                        state.copy(
+                            feedbackSubmittingIds = state.feedbackSubmittingIds - shareId,
+                            clientFeedbacks = state.clientFeedbacks.map {
+                                if (it.id == updated.id) updated else it
+                            },
+                            feedback = "Feedback sent to client."
+                        )
+                    }
+                }
+                .onFailure { throwable ->
+                    _uiState.update { state ->
+                        state.copy(
+                            feedbackSubmittingIds = state.feedbackSubmittingIds - shareId,
+                            feedback = userMessage(throwable)
+                        )
+                    }
                 }
         }
     }

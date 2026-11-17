@@ -1,6 +1,11 @@
 package com.calisthenics.ai.data.remote.datasource
 
 import com.calisthenics.ai.data.remote.api.CalisthenicsApi
+import com.calisthenics.ai.data.remote.dto.AiPerformanceSummaryDto
+import com.calisthenics.ai.data.remote.dto.AnalysisHistorySummaryDto
+import com.calisthenics.ai.data.remote.dto.AnalysisSessionResponseDto
+import com.calisthenics.ai.data.remote.dto.CompleteAnalysisSessionRequestDto
+import com.calisthenics.ai.data.remote.dto.CreateAnalysisSessionRequestDto
 import com.calisthenics.ai.data.remote.dto.LiveAnalysisResponseDto
 import com.calisthenics.ai.data.remote.dto.LiveExerciseCatalogDto
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -14,6 +19,30 @@ class RemoteLiveAnalysisDataSource @Inject constructor(
     private val api: CalisthenicsApi
 ) {
     suspend fun getSupportedExercises(): LiveExerciseCatalogDto = api.getLiveExercises()
+
+    suspend fun createAnalysisSession(request: CreateAnalysisSessionRequestDto): AnalysisSessionResponseDto =
+        api.createAnalysisSession(request)
+
+    suspend fun recordRep(sessionId: String, rep: com.calisthenics.ai.data.remote.dto.RepHistoryDto): AnalysisSessionResponseDto =
+        api.recordRep(sessionId, rep)
+
+    suspend fun completeAnalysisSession(
+        sessionId: String,
+        request: CompleteAnalysisSessionRequestDto
+    ): AnalysisSessionResponseDto =
+        api.completeAnalysisSession(sessionId, request)
+
+    suspend fun generateAnalysisSessionAiSummary(sessionId: String): AiPerformanceSummaryDto =
+        api.generateAnalysisSessionAiSummary(sessionId)
+
+    suspend fun getAnalysisSessions(exerciseType: String? = null): List<AnalysisSessionResponseDto> =
+        api.getAnalysisSessions(exerciseType)
+
+    suspend fun getAnalysisSessionDetails(sessionId: String): AnalysisSessionResponseDto =
+        api.getAnalysisSessionDetails(sessionId)
+
+    suspend fun getAnalysisHistorySummary(exerciseType: String? = null): AnalysisHistorySummaryDto =
+        api.getAnalysisHistorySummary(exerciseType)
 
     suspend fun analyzeFrame(
         imageFile: File,

@@ -2,6 +2,8 @@ package com.calisthenics.ai.ui.bodymetrics
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.calisthenics.ai.data.local.AccountSessionGuard
+import com.calisthenics.ai.data.local.AccountSessionManager
 import com.calisthenics.ai.data.remote.dto.BodyMeasurementDto
 import com.calisthenics.ai.data.remote.dto.CurrentBodyMetricsDto
 import com.calisthenics.ai.data.remote.dto.ProgressChartDataPointDto
@@ -91,21 +93,31 @@ data class BodyMetricsUiState(
 
 @HiltViewModel
 class BodyMetricsViewModel @Inject constructor(
-    private val bodyMetricsRepository: BodyMetricsRepository
+    private val bodyMetricsRepository: BodyMetricsRepository,
+    private val accountSessionManager: AccountSessionManager = AccountSessionManager()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BodyMetricsUiState())
     val uiState: StateFlow<BodyMetricsUiState> = _uiState.asStateFlow()
 
+    private val sessionGuard = AccountSessionGuard(
+        parentScope = viewModelScope,
+        sessionManager = accountSessionManager,
+        onSessionCleared = { _uiState.value = BodyMetricsUiState() },
+        onSessionActive = { loadData() }
+    )
+
     init {
+        sessionGuard.startObserving()
         loadData()
     }
 
     fun loadData() {
         _uiState.update { it.copy(isLoading = true, error = null) }
-        viewModelScope.launch {
+        sessionGuard.launchScoped { captured ->
             val currentRes = bodyMetricsRepository.getCurrentBodyMetrics()
             val historyRes = bodyMetricsRepository.getBodyMetricsHistory(page = 0, size = 100, sort = "desc")
+            if (!sessionGuard.isCurrentSession(captured)) return@launchScoped
 
             if (currentRes.isSuccess && historyRes.isSuccess) {
                 _uiState.update {

@@ -1,5 +1,8 @@
 package com.calisthenics.ai.ui.workoutsession.timer
 
+import com.calisthenics.ai.R
+
+
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -25,10 +28,10 @@ open class WorkoutNotificationHelper @Inject constructor(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Workout Timers",
+                context.getString(R.string.loc_workout_timers),
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Notifications for workout countdowns and rest timers"
+                description = context.getString(R.string.loc_workout_timers_description)
                 enableVibration(true)
             }
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
@@ -47,11 +50,11 @@ open class WorkoutNotificationHelper @Inject constructor(
             }
         }
 
-        val title = "Rest Complete!"
+        val title = context.getString(R.string.loc_rest_complete)
         val content = if (exerciseName.isNotBlank()) {
-            "Ready for Set $nextSetNumber: $exerciseName"
+            context.getString(R.string.loc_ready_for_set, nextSetNumber, exerciseName)
         } else {
-            "Rest period finished. Ready for your next set!"
+            context.getString(R.string.loc_rest_finished_next_set)
         }
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)

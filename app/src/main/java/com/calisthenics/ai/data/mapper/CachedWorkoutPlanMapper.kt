@@ -23,7 +23,8 @@ fun CachedWorkoutPlanEntity.toDomain(days: List<UserWorkoutPlanDay>): UserWorkou
         id = id,
         name = name,
         splitType = split,
-        days = days
+        days = days,
+        isActive = isActive
     )
 }
 
@@ -75,12 +76,14 @@ fun CachedWorkoutPlanExerciseEntity.toDomain(): UserWorkoutPlanExercise {
 }
 
 fun UserWorkoutPlan.toEntity(
+    ownerUserId: Long,
     isCoachAssigned: Boolean = false,
     coachName: String? = null,
     assignmentId: Long? = null,
-    isActive: Boolean = false
+    isActive: Boolean = this.isActive
 ): CachedWorkoutPlanEntity {
     return CachedWorkoutPlanEntity(
+        ownerUserId = ownerUserId,
         id = id,
         name = name,
         splitType = splitType.name,
@@ -92,8 +95,9 @@ fun UserWorkoutPlan.toEntity(
     )
 }
 
-fun UserWorkoutPlanDay.toEntity(planId: Long): CachedWorkoutPlanDayEntity {
+fun UserWorkoutPlanDay.toEntity(ownerUserId: Long, planId: Long): CachedWorkoutPlanDayEntity {
     return CachedWorkoutPlanDayEntity(
+        ownerUserId = ownerUserId,
         id = id,
         planId = planId,
         dayOfWeek = dayOfWeek.name,
@@ -104,8 +108,13 @@ fun UserWorkoutPlanDay.toEntity(planId: Long): CachedWorkoutPlanDayEntity {
     )
 }
 
-fun UserWorkoutPlanExercise.toEntity(planId: Long, dayId: Long): CachedWorkoutPlanExerciseEntity {
+fun UserWorkoutPlanExercise.toEntity(
+    ownerUserId: Long,
+    planId: Long,
+    dayId: Long
+): CachedWorkoutPlanExerciseEntity {
     return CachedWorkoutPlanExerciseEntity(
+        ownerUserId = ownerUserId,
         id = id,
         planId = planId,
         dayId = dayId,

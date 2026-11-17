@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.media
 
+import com.calisthenics.ai.R
+
 import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
@@ -49,6 +51,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
@@ -171,7 +174,7 @@ private fun MediaThumbnail(
         if (imageUrl != null && !failed) {
             AsyncImage(
                 model = ImageRequest.Builder(context).data(imageUrl).crossfade(true).build(),
-                contentDescription = "Open exercise media",
+                contentDescription = stringResource(R.string.loc_open_exercise_media),
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(2.dp)
@@ -190,7 +193,7 @@ private fun MediaThumbnail(
             ) {
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Video",
+                    contentDescription = stringResource(R.string.video),
                     tint = Color.White.copy(alpha = 0.8f),
                     modifier = Modifier.size(28.dp)
                 )
@@ -412,7 +415,7 @@ fun ExerciseStoryViewer(
                                     .data(thumbUrl)
                                     .crossfade(true)
                                     .build(),
-                                contentDescription = "Video preview thumbnail",
+                                contentDescription = stringResource(R.string.video_preview_thumbnail),
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Fit
                             )
@@ -438,7 +441,7 @@ fun ExerciseStoryViewer(
                         .diskCacheKey(media.url)
                         .crossfade(true)
                         .build(),
-                    contentDescription = "Exercise story ${currentIndex + 1}",
+                    contentDescription = stringResource(R.string.loc_exercise_story_index, currentIndex + 1),
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit,
                     onError = { imageLoadFailed = true }
@@ -492,7 +495,7 @@ fun ExerciseStoryViewer(
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close story", tint = Color.White)
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close_story), tint = Color.White)
                     }
                 }
             }
@@ -569,7 +572,7 @@ private fun UnavailableMedia(
         TextButton(onClick = onRetry) {
             Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White)
             Spacer(Modifier.width(6.dp))
-            Text("Retry", color = Color.White)
+            Text(stringResource(R.string.common_retry), color = Color.White)
         }
     }
 }

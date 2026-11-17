@@ -2,6 +2,7 @@ package com.calisthenics.ai.data.remote.websocket
 
 import android.util.Log
 import com.calisthenics.ai.BuildConfig
+import com.calisthenics.ai.data.local.AccountSession
 import com.calisthenics.ai.data.local.TokenManager
 import com.calisthenics.ai.data.remote.dto.ChatMessageDto
 import com.calisthenics.ai.data.remote.dto.UserPresenceDto
@@ -54,6 +55,8 @@ class ChatWebSocketClient @Inject constructor(
     val presenceUpdates: SharedFlow<UserPresenceDto> = _presenceUpdates.asSharedFlow()
 
     private var webSocket: WebSocket? = null
+    private var activeSocketSession: AccountSession? = null
+    private val socketAttemptCounter = AtomicInteger(0)
     private val isExplicitDisconnect = AtomicBoolean(false)
     private val subIdGenerator = AtomicInteger(1)
 
@@ -63,19 +66,37 @@ class ChatWebSocketClient @Inject constructor(
     private var heartbeatJob: Job? = null
 
     fun connect() {
-        if (_connectionState.value == WebSocketState.CONNECTED ||
-            _connectionState.value == WebSocketState.CONNECTING
+        val currentSession = tokenManager.currentSessionSnapshot()
+        val token = if (currentSession.isAuthenticated) {
+            tokenManager.getAccessTokenFor(currentSession.activeUserId) ?: tokenManager.getAccessToken()
+        } else {
+            tokenManager.getAccessToken()
+        }
+        if (token.isNullOrBlank()) {
+            disconnect()
+            return
+        }
+
+        val currentSocketSession = activeSocketSession
+        val sessionMatches = currentSocketSession != null &&
+            currentSocketSession.activeUserId == currentSession.activeUserId &&
+            currentSocketSession.generation == currentSession.generation
+
+        if (sessionMatches &&
+            (_connectionState.value == WebSocketState.CONNECTED ||
+                _connectionState.value == WebSocketState.CONNECTING)
         ) {
             return
         }
 
-        val token = tokenManager.getAccessToken()
-        if (token.isNullOrBlank()) {
-            _connectionState.value = WebSocketState.DISCONNECTED
-            return
+        // If an older account's socket is open or connecting, shut it down cleanly before opening a new one.
+        if (webSocket != null && !sessionMatches) {
+            disconnect()
         }
 
         isExplicitDisconnect.set(false)
+        activeSocketSession = currentSession
+        val socketAttemptId = socketAttemptCounter.incrementAndGet()
         _connectionState.value = WebSocketState.CONNECTING
 
         val wsUrl = buildWsUrl(token)
@@ -84,17 +105,23 @@ class ChatWebSocketClient @Inject constructor(
             .addHeader("Authorization", "Bearer $token")
             .build()
 
-        webSocket = okHttpClient.newWebSocket(request, createWebSocketListener(token))
+        webSocket = okHttpClient.newWebSocket(
+            request,
+            createWebSocketListener(token, currentSession, socketAttemptId)
+        )
     }
 
     fun disconnect() {
         isExplicitDisconnect.set(true)
+        socketAttemptCounter.incrementAndGet()
+        activeSocketSession = null
         reconnectJob?.cancel()
         reconnectJob = null
         heartbeatJob?.cancel()
         heartbeatJob = null
-        webSocket?.close(1000, "Normal closure")
+        val closingSocket = webSocket
         webSocket = null
+        closingSocket?.close(1000, "Normal closure")
         _connectionState.value = WebSocketState.DISCONNECTED
         activeSubscriptions.clear()
     }
@@ -165,9 +192,26 @@ class ChatWebSocketClient @Inject constructor(
         }
     }
 
-    private fun createWebSocketListener(token: String): WebSocketListener {
+    private fun isAttemptActive(expectedSession: AccountSession, socketAttemptId: Int): Boolean {
+        if (isExplicitDisconnect.get() || socketAttemptId != socketAttemptCounter.get()) {
+            return false
+        }
+        val currentSession = tokenManager.currentSessionSnapshot()
+        return currentSession.activeUserId == expectedSession.activeUserId &&
+            currentSession.generation == expectedSession.generation
+    }
+
+    private fun createWebSocketListener(
+        token: String,
+        expectedSession: AccountSession,
+        socketAttemptId: Int
+    ): WebSocketListener {
         return object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                if (!isAttemptActive(expectedSession, socketAttemptId)) {
+                    webSocket.close(1000, "Stale session")
+                    return
+                }
                 // Send STOMP CONNECT frame
                 val connectFrame = StompFrame(
                     command = "CONNECT",
@@ -181,6 +225,10 @@ class ChatWebSocketClient @Inject constructor(
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
+                if (!isAttemptActive(expectedSession, socketAttemptId)) {
+                    webSocket.close(1000, "Stale session")
+                    return
+                }
                 val frame = StompFrame.parse(text) ?: return
 
                 when (frame.command) {
@@ -196,7 +244,7 @@ class ChatWebSocketClient @Inject constructor(
                             if (frame.headers["subscription"] == presenceSubscriptionId) {
                                 runCatching {
                                     val presenceDto = gson.fromJson(body, UserPresenceDto::class.java)
-                                    if (presenceDto != null) {
+                                    if (presenceDto != null && isAttemptActive(expectedSession, socketAttemptId)) {
                                         _presenceUpdates.tryEmit(presenceDto)
                                     }
                                 }.onFailure { e ->
@@ -205,7 +253,7 @@ class ChatWebSocketClient @Inject constructor(
                             } else {
                                 runCatching {
                                     val messageDto = gson.fromJson(body, ChatMessageDto::class.java)
-                                    if (messageDto != null) {
+                                    if (messageDto != null && isAttemptActive(expectedSession, socketAttemptId)) {
                                         _incomingMessages.tryEmit(messageDto)
                                     }
                                 }.onFailure { e ->
@@ -221,17 +269,21 @@ class ChatWebSocketClient @Inject constructor(
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                heartbeatJob?.cancel()
+                if (socketAttemptId == socketAttemptCounter.get()) {
+                    heartbeatJob?.cancel()
+                }
                 webSocket.close(1000, null)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (socketAttemptId != socketAttemptCounter.get()) return
                 heartbeatJob?.cancel()
                 _connectionState.value = WebSocketState.DISCONNECTED
                 scheduleReconnect()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (socketAttemptId != socketAttemptCounter.get()) return
                 heartbeatJob?.cancel()
                 _connectionState.value = WebSocketState.ERROR
                 scheduleReconnect()

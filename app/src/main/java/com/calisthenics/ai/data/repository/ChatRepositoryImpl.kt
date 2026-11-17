@@ -133,6 +133,7 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     override fun getCurrentUserId(): Long? {
-        return tokenManager.getUserId()
+        return tokenManager.currentSessionSnapshot().activeUserId?.takeIf { it > 0L }
+            ?: tokenManager.getUserId()?.takeIf { it > 0L }
     }
 }

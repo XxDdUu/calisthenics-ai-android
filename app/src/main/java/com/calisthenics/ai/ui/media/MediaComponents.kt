@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.media
 
+import com.calisthenics.ai.R
+
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -21,6 +23,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -88,7 +91,7 @@ fun ImageSelectorSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Ảnh minh họa",
+                text = stringResource(R.string.loc_illustration_local),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -97,14 +100,14 @@ fun ImageSelectorSection(
                     onClick = launchPicker,
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    Text(if (hasImage) "Thay đổi ảnh" else "Chọn ảnh", fontSize = 12.sp)
+                    Text(if (hasImage) stringResource(R.string.loc_change_photo) else stringResource(R.string.loc_choose_photo), fontSize = 12.sp)
                 }
                 if (hasImage) {
                     TextButton(
                         onClick = onRemoveImage,
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                     ) {
-                        Text("Xóa ảnh", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                        Text(stringResource(R.string.loc_delete_photo), color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                     }
                 }
             }
@@ -146,7 +149,7 @@ fun ImageSelectorSection(
             ) {
                 AsyncImage(
                     model = previewModel,
-                    contentDescription = "Image preview",
+                    contentDescription = stringResource(R.string.image_preview),
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit
                 )
@@ -210,7 +213,7 @@ fun VideoSelectorSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Video hướng dẫn",
+                text = stringResource(R.string.loc_video_instructional),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -219,14 +222,14 @@ fun VideoSelectorSection(
                     onClick = launchPicker,
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    Text(if (hasVideo) "Thay đổi video" else "Chọn video", fontSize = 12.sp)
+                    Text(if (hasVideo) stringResource(R.string.loc_change_video) else stringResource(R.string.loc_choose_video), fontSize = 12.sp)
                 }
                 if (hasVideo) {
                     TextButton(
                         onClick = onRemoveVideo,
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                     ) {
-                        Text("Xóa video", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                        Text(stringResource(R.string.loc_delete_video), color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                     }
                 }
             }
@@ -278,7 +281,7 @@ fun VideoSelectorSection(
                         if (thumbnailBitmap != null) {
                             Image(
                                 bitmap = thumbnailBitmap!!.asImageBitmap(),
-                                contentDescription = "Video thumbnail",
+                                contentDescription = stringResource(R.string.video_thumbnail),
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )
@@ -294,13 +297,13 @@ fun VideoSelectorSection(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = videoFileName ?: "Video file",
+                            text = videoFileName ?: stringResource(R.string.loc_video_file),
                             style = MaterialTheme.typography.bodyMedium,
                             maxLines = 1
                         )
                         if (videoFileSize != null) {
                             Text(
-                                text = "Kích thước: $videoFileSize",
+                                text = stringResource(R.string.loc_file_size, videoFileSize.toString()),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

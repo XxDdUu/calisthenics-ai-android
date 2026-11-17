@@ -1,5 +1,7 @@
 package com.calisthenics.ai.ui.auth
 
+import com.calisthenics.ai.R
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -58,6 +60,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -132,14 +135,14 @@ fun ForgotPasswordScreen(
         backEnabled = !state.loading
     ) {
         Text(
-            text = "Forgot password?",
+            text = stringResource(R.string.forgot_password),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = PrimaryText
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Enter your email address and we will send you a 6-digit verification code to reset your password.",
+            text = stringResource(R.string.loc_enter_reset_email),
             style = MaterialTheme.typography.bodyMedium,
             color = SecondaryText
         )
@@ -148,9 +151,9 @@ fun ForgotPasswordScreen(
         OutlinedTextField(
             value = state.email,
             onValueChange = viewModel::updateEmail,
-            label = { Text("Email address") },
+            label = { Text(stringResource(R.string.loc_email_address)) },
             leadingIcon = {
-                Icon(Icons.Default.Email, contentDescription = "Email icon", tint = SecondaryText)
+                Icon(Icons.Default.Email, contentDescription = stringResource(R.string.loc_email_icon), tint = SecondaryText)
             },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -196,7 +199,7 @@ fun ForgotPasswordScreen(
             if (state.loading) {
                 CircularProgressIndicator(Modifier.size(20.dp), color = Ink, strokeWidth = 2.dp)
             } else {
-                Text("Send verification code", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.loc_send_verification_code), fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -238,14 +241,14 @@ fun OtpVerificationScreen(
         backEnabled = !state.verifying && !state.resending && !state.loading
     ) {
         Text(
-            text = "Verify your email",
+            text = stringResource(R.string.verify_email),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = PrimaryText
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Enter the verification code sent to your email.",
+            text = stringResource(R.string.enter_verification_code),
             style = MaterialTheme.typography.bodyMedium,
             color = SecondaryText
         )
@@ -272,7 +275,7 @@ fun OtpVerificationScreen(
                 ) {
                     Icon(
                         Icons.Default.Email,
-                        contentDescription = "Email",
+                        contentDescription = stringResource(R.string.email),
                         tint = Accent,
                         modifier = Modifier.size(20.dp)
                     )
@@ -289,7 +292,7 @@ fun OtpVerificationScreen(
                     enabled = !state.verifying && !state.resending && !state.loading
                 ) {
                     Text(
-                        text = "Change",
+                        text = stringResource(R.string.loc_change),
                         color = Accent,
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Bold
@@ -320,7 +323,7 @@ fun OtpVerificationScreen(
         if (state.error != null) {
             ErrorBanner(state.error!!)
         } else if (state.status == OtpStatus.SUCCESS) {
-            SuccessBanner(state.message ?: "Email verified successfully.")
+            SuccessBanner(state.message ?: stringResource(R.string.email_verified_successfully))
         } else if (!state.message.isNullOrBlank()) {
             InfoBanner(state.message!!)
         }
@@ -345,7 +348,7 @@ fun OtpVerificationScreen(
             if (state.verifying) {
                 CircularProgressIndicator(Modifier.size(20.dp), color = Ink, strokeWidth = 2.dp)
             } else {
-                Text("Verify", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.loc_verify), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
             }
         }
 
@@ -358,7 +361,7 @@ fun OtpVerificationScreen(
         ) {
             if (state.resendSecondsRemaining > 0) {
                 Text(
-                    text = "Resend code in ${formatCountdown(state.resendSecondsRemaining)}",
+                    text = stringResource(R.string.resend_code_in, formatCountdown(state.resendSecondsRemaining)),
                     color = SecondaryText,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -368,7 +371,7 @@ fun OtpVerificationScreen(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "Didn't receive code? ",
+                        text = stringResource(R.string.didnt_receive_code),
                         color = SecondaryText,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -380,14 +383,14 @@ fun OtpVerificationScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "Resending...",
+                            text = stringResource(R.string.resending),
                             color = Accent,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                     } else {
                         Text(
-                            text = "Resend Code",
+                            text = stringResource(R.string.resend_code),
                             color = Accent,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
@@ -444,14 +447,14 @@ fun ResetPasswordScreen(
         backEnabled = !state.loading
     ) {
         Text(
-            text = "Create a new password",
+            text = stringResource(R.string.create_new_password),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = PrimaryText
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Use a strong password that you haven't used before.",
+            text = stringResource(R.string.strong_password_hint),
             style = MaterialTheme.typography.bodyMedium,
             color = SecondaryText
         )
@@ -460,7 +463,7 @@ fun ResetPasswordScreen(
         PasswordField(
             value = newPassword,
             onValueChange = { newPassword = it },
-            label = "New password",
+            label = stringResource(R.string.loc_new_password),
             visible = showNewPassword,
             onVisibilityChange = { showNewPassword = !showNewPassword }
         )
@@ -468,14 +471,14 @@ fun ResetPasswordScreen(
         PasswordField(
             value = confirmPassword,
             onValueChange = { confirmPassword = it },
-            label = "Confirm new password",
+            label = stringResource(R.string.loc_confirm_new_password),
             visible = showConfirmPassword,
             onVisibilityChange = { showConfirmPassword = !showConfirmPassword }
         )
 
         Spacer(Modifier.height(12.dp))
         Text(
-            text = "Password must be at least 8 characters, containing uppercase, lowercase, numbers, and symbols.",
+            text = stringResource(R.string.password_requirements),
             color = SecondaryText,
             style = MaterialTheme.typography.bodySmall
         )
@@ -504,7 +507,7 @@ fun ResetPasswordScreen(
             if (state.loading) {
                 CircularProgressIndicator(Modifier.size(20.dp), color = Ink, strokeWidth = 2.dp)
             } else {
-                Text("Reset password", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.loc_reset_password), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
             }
         }
     }
@@ -709,7 +712,7 @@ internal fun PasswordResetContainer(
         ) {
             Icon(
                 Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
+                contentDescription = stringResource(R.string.common_back),
                 tint = if (backEnabled) PrimaryText else SecondaryText
             )
         }
@@ -733,7 +736,7 @@ internal fun ErrorBanner(message: String) {
         ) {
             Icon(
                 Icons.Default.ErrorOutline,
-                contentDescription = "Error",
+                contentDescription = stringResource(R.string.error_content_description),
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(20.dp)
             )
@@ -761,7 +764,7 @@ internal fun SuccessBanner(message: String) {
         ) {
             Icon(
                 Icons.Default.CheckCircle,
-                contentDescription = "Success",
+                contentDescription = stringResource(R.string.loc_success),
                 tint = Accent,
                 modifier = Modifier.size(20.dp)
             )
@@ -790,7 +793,7 @@ internal fun InfoBanner(message: String) {
         ) {
             Icon(
                 Icons.Default.Info,
-                contentDescription = "Info",
+                contentDescription = stringResource(R.string.loc_info),
                 tint = Accent,
                 modifier = Modifier.size(20.dp)
             )

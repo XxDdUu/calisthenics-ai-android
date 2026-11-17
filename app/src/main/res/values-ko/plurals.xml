@@ -1,0 +1,6 @@
+<resources>
+    <plurals name="exercise_count">
+        <item quantity="one">운동 %d개</item>
+        <item quantity="other">운동 %d개</item>
+    </plurals>
+</resources>
