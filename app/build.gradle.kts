@@ -218,9 +218,30 @@ dependencies {
 }
 
 tasks.configureEach {
-    if (name.startsWith("processDev") && name.endsWith("GoogleServices") &&
-        !file("src/dev/google-services.json").exists()
-    ) {
-        enabled = false
+    if (name.startsWith("process") && name.endsWith("GoogleServices")) {
+        val flavor = when {
+            name.startsWith("processDev") -> "dev"
+            name.startsWith("processProd") -> "prod"
+            else -> null
+        }
+        val buildType = when {
+            name.endsWith("DebugGoogleServices") -> "debug"
+            name.endsWith("ReleaseGoogleServices") -> "release"
+            else -> null
+        }
+        if (flavor != null && buildType != null) {
+            val capitalizedBuildType = buildType.replaceFirstChar { it.uppercaseChar() }
+            val candidatePaths = buildList {
+                // Root app/google-services.json is scoped to prod (com.calisthenics.ai),
+                // so dev only uses dev-specific configs and CI skips prod when gitignored.
+                if (flavor == "prod") add("google-services.json")
+                add("src/$flavor/google-services.json")
+                add("src/$flavor$capitalizedBuildType/google-services.json")
+                add("src/$flavor/$buildType/google-services.json")
+            }
+            if (candidatePaths.none { file(it).exists() }) {
+                enabled = false
+            }
+        }
     }
 }

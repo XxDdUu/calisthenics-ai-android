@@ -40,7 +40,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run Android Unit Tests
-        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+        run: ./gradlew testDevDebugUnitTest testProdDebugUnitTest --no-daemon --stacktrace
 
       - name: Prepare Keystore for Signing
         id: keystore
@@ -64,13 +64,13 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ "$HAS_KEYSTORE" = "true" ]; then
-            ./gradlew assembleRelease --no-daemon \
+            ./gradlew assembleProdRelease --no-daemon \
               -PANDROID_KEYSTORE_PATH=release.keystore \
               -PANDROID_KEYSTORE_PASSWORD="$KEYSTORE_PASSWORD" \
               -PANDROID_KEY_ALIAS="$KEY_ALIAS" \
               -PANDROID_KEY_PASSWORD="$KEY_PASSWORD"
           else
-            ./gradlew assembleRelease --no-daemon
+            ./gradlew assembleProdRelease --no-daemon
           fi
 
       - name: Clean Up Keystore
@@ -88,12 +88,12 @@ jobs:
             TAG_NAME="v1.0"
           fi
 
-          OUTPUT_DIR="app/build/outputs/apk/release"
-          if [ -f "$OUTPUT_DIR/app-release.apk" ]; then
-            APK_SRC="$OUTPUT_DIR/app-release.apk"
+          OUTPUT_DIR="app/build/outputs/apk/prod/release"
+          if [ -f "$OUTPUT_DIR/app-prod-release.apk" ]; then
+            APK_SRC="$OUTPUT_DIR/app-prod-release.apk"
             IS_SIGNED="true"
-          elif [ -f "$OUTPUT_DIR/app-release-unsigned.apk" ]; then
-            APK_SRC="$OUTPUT_DIR/app-release-unsigned.apk"
+          elif [ -f "$OUTPUT_DIR/app-prod-release-unsigned.apk" ]; then
+            APK_SRC="$OUTPUT_DIR/app-prod-release-unsigned.apk"
             IS_SIGNED="false"
           else
             echo "Error: No release APK found in $OUTPUT_DIR"
