@@ -3,10 +3,13 @@ package com.calisthenics.ai.data.repository
 import com.calisthenics.ai.data.mapper.toDomain
 import com.calisthenics.ai.data.mapper.toDto
 import com.calisthenics.ai.data.remote.datasource.RemoteAdminDataSource
+import com.calisthenics.ai.data.remote.dto.BulkExerciseGenerationRequestDto
 import com.calisthenics.ai.data.remote.dto.CreateAdminExerciseRequestDto
 import com.calisthenics.ai.data.remote.dto.ExerciseMediaItemRequestDto
 import com.calisthenics.ai.data.remote.dto.UpdateAdminExerciseRequestDto
 import com.calisthenics.ai.domain.model.AdminAiChatResponse
+import com.calisthenics.ai.domain.model.BulkExerciseGenerationItem
+import com.calisthenics.ai.domain.model.BulkExerciseGenerationJob
 import com.calisthenics.ai.domain.model.AdminConfirmationDecision
 import com.calisthenics.ai.domain.model.AdminAiConversationSummary
 import com.calisthenics.ai.domain.model.AdminAiMessage
@@ -15,6 +18,7 @@ import com.calisthenics.ai.domain.model.AdminCoachClientStatistics
 import com.calisthenics.ai.domain.model.AdminDashboard
 import com.calisthenics.ai.domain.model.AdminExercise
 import com.calisthenics.ai.domain.model.AdminExerciseDeleteResult
+import com.calisthenics.ai.domain.model.AdminExerciseStats
 import com.calisthenics.ai.domain.model.AdminGlobalUserStatistics
 import com.calisthenics.ai.domain.model.AdminGlobalUserSummary
 import com.calisthenics.ai.domain.model.AdminPage
@@ -31,11 +35,28 @@ import com.calisthenics.ai.domain.model.AdminWorkoutSession
 import com.calisthenics.ai.domain.model.AdminWorkoutSessionDetail
 import com.calisthenics.ai.domain.model.ExerciseMedia
 import com.calisthenics.ai.domain.repository.AdminRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import retrofit2.HttpException
+import java.io.IOException
+import java.util.UUID
 import javax.inject.Inject
 
-class AdminRepositoryImpl @Inject constructor(
-    private val remoteDataSource: RemoteAdminDataSource
+class AdminRepositoryImpl private constructor(
+    private val remoteDataSource: RemoteAdminDataSource,
+    private val retryDelaysMs: List<Long>
 ) : AdminRepository {
+
+    @Inject
+    constructor(remoteDataSource: RemoteAdminDataSource) : this(
+        remoteDataSource = remoteDataSource,
+        retryDelaysMs = listOf(450L, 1100L)
+    )
+
+    companion object {
+        fun forTest(remoteDataSource: RemoteAdminDataSource, retryDelaysMs: List<Long> = emptyList()) =
+            AdminRepositoryImpl(remoteDataSource, retryDelaysMs)
+    }
 
     override suspend fun getDashboard(): Result<AdminDashboard> = runCatching {
         remoteDataSource.getDashboard().toDomain()
@@ -98,6 +119,97 @@ class AdminRepositoryImpl @Inject constructor(
     ): Result<AdminPage<AdminExercise>> = runCatching {
         remoteDataSource.getExercises(page, size, search, category, difficulty, active, sortBy, sortDirection)
             .toDomain { it.toDomain() }
+    }
+
+    override suspend fun getExercisesFiltered(
+        page: Int,
+        size: Int,
+        search: String?,
+        category: String?,
+        difficulty: String?,
+        active: Boolean?,
+        status: String?,
+        origin: String?,
+        sortBy: String,
+        sortDirection: String
+    ): Result<AdminPage<AdminExercise>> = runCatching {
+        remoteDataSource.getExercises(page, size, search, category, difficulty, active, sortBy, sortDirection, status, origin)
+            .toDomain { it.toDomain() }
+    }
+
+    override suspend fun getExercisesFilteredWithTrainingType(
+        page: Int,
+        size: Int,
+        search: String?,
+        category: String?,
+        difficulty: String?,
+        active: Boolean?,
+        status: String?,
+        origin: String?,
+        trainingType: String?,
+        sortBy: String,
+        sortDirection: String
+    ): Result<AdminPage<AdminExercise>> = runCatching {
+        remoteDataSource.getExercises(
+            page, size, search, category, difficulty, active, sortBy, sortDirection, status, origin, trainingType
+        ).toDomain { it.toDomain() }
+    }
+
+    override suspend fun startBulkExerciseGeneration(
+        prompt: String?,
+        quantity: Int?,
+        trainingType: String?,
+        categories: List<String>?,
+        focus: String?,
+        conversationId: Long?,
+        idempotencyKey: String?
+    ): Result<BulkExerciseGenerationJob> = executeWithTransientRetry(maxRetries = 1) {
+        val key = idempotencyKey?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+        remoteDataSource.startBulkExerciseGeneration(
+            BulkExerciseGenerationRequestDto(
+                prompt = prompt,
+                quantity = quantity,
+                trainingType = trainingType,
+                categories = categories,
+                focus = focus,
+                conversationId = conversationId,
+                idempotencyKey = key
+            ),
+            idempotencyKey = key
+        ).toDomain()
+    }
+
+    override suspend fun listBulkExerciseGenerationJobs(
+        page: Int,
+        size: Int
+    ): Result<AdminPage<BulkExerciseGenerationJob>> = runCatching {
+        remoteDataSource.listBulkExerciseGenerationJobs(page, size).toDomain { it.toDomain() }
+    }
+
+    override suspend fun getBulkExerciseGenerationJob(jobId: Long): Result<BulkExerciseGenerationJob> = runCatching {
+        remoteDataSource.getBulkExerciseGenerationJob(jobId).toDomain()
+    }
+
+    override suspend fun getBulkExerciseGenerationItems(
+        jobId: Long,
+        outcome: String?,
+        page: Int,
+        size: Int
+    ): Result<AdminPage<BulkExerciseGenerationItem>> = runCatching {
+        remoteDataSource.getBulkExerciseGenerationItems(jobId, outcome, page, size)
+            .toDomain { it.toDomain() }
+    }
+
+    override suspend fun resumeBulkExerciseGenerationJob(jobId: Long): Result<BulkExerciseGenerationJob> = runCatching {
+        remoteDataSource.resumeBulkExerciseGenerationJob(jobId).toDomain()
+    }
+
+    override suspend fun getExerciseStats(): Result<AdminExerciseStats> = runCatching {
+        remoteDataSource.getExerciseStats().toDomain()
+    }
+
+    override suspend fun bulkUpdateExerciseStatus(exerciseIds: List<Long>, active: Boolean): Result<List<AdminExercise>> = runCatching {
+        remoteDataSource.bulkUpdateExerciseStatus(exerciseIds, active).map { it.toDomain() }
     }
 
     override suspend fun getExercise(exerciseId: Long): Result<AdminExercise> = runCatching {
@@ -185,8 +297,69 @@ class AdminRepositoryImpl @Inject constructor(
         range: String,
         startDate: String?,
         endDate: String?
-    ): Result<AdminAiChatResponse> = runCatching {
-        remoteDataSource.sendAdminAiChat(conversationId, message, range, startDate, endDate).toDomain()
+    ): Result<AdminAiChatResponse> = sendAdminAiChatIdempotent(
+        conversationId = conversationId,
+        message = message,
+        range = range,
+        startDate = startDate,
+        endDate = endDate,
+        idempotencyKey = UUID.randomUUID().toString()
+    )
+
+    override suspend fun sendAdminAiChatIdempotent(
+        conversationId: Long?,
+        message: String,
+        range: String,
+        startDate: String?,
+        endDate: String?,
+        idempotencyKey: String?
+    ): Result<AdminAiChatResponse> {
+        val stableKey = idempotencyKey?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+        return executeWithTransientRetry(maxRetries = 2) {
+            remoteDataSource.sendAdminAiChat(
+                conversationId = conversationId,
+                message = message,
+                range = range,
+                startDate = startDate,
+                endDate = endDate,
+                idempotencyKey = stableKey
+            ).toDomain()
+        }
+    }
+
+    private suspend fun <T> executeWithTransientRetry(
+        maxRetries: Int,
+        block: suspend () -> T
+    ): Result<T> {
+        var attempt = 0
+        var lastError: Throwable? = null
+        while (attempt <= maxRetries) {
+            try {
+                return Result.success(block())
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                lastError = t
+                if (attempt >= maxRetries || !isTransientRetryable(t)) {
+                    return Result.failure(t)
+                }
+                val delayMs = retryDelaysMs.getOrElse(attempt) { 0L }
+                attempt++
+                if (delayMs > 0L) {
+                    delay(delayMs)
+                }
+            }
+        }
+        return Result.failure(lastError ?: IllegalStateException("Unknown request failure"))
+    }
+
+    private fun isTransientRetryable(t: Throwable): Boolean = when (t) {
+        is IOException -> true
+        is HttpException -> {
+            val code = t.code()
+            code == 408 || code == 429 || code in 500..599
+        }
+        else -> false
     }
 
     override suspend fun resolveAdminAiConfirmation(

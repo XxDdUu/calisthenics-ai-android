@@ -20,6 +20,8 @@ import com.calisthenics.ai.domain.model.AdminUser
 import com.calisthenics.ai.domain.model.AdminUserDetailDossier
 import com.calisthenics.ai.domain.model.AdminUserSegmentFilter
 import com.calisthenics.ai.domain.model.AdminUserSegments
+import com.calisthenics.ai.domain.model.BulkExerciseGenerationItem
+import com.calisthenics.ai.domain.model.BulkExerciseGenerationJob
 import com.calisthenics.ai.domain.model.GettingStartedCampaignAnalytics
 import com.calisthenics.ai.domain.model.GettingStartedCampaignSummary
 import com.calisthenics.ai.domain.model.GettingStartedProgram
@@ -255,7 +257,7 @@ class AdminViewModelTest {
         )
 
         coEvery {
-            adminRepository.sendAdminAiChat(null, "What exercises should we add?", "LAST_30_DAYS", null, null)
+            adminRepository.sendAdminAiChatIdempotent(null, "What exercises should we add?", "LAST_30_DAYS", null, null, any())
         } returns Result.success(chatResponse)
         coEvery { adminRepository.getAdminAiConversations() } returns Result.success(
             listOf(AdminAiConversationSummary(100L, "Exercise Recommendations", "We should add Tuck Planche.", "ASSISTANT", null, null, 2))
@@ -543,7 +545,9 @@ class AdminViewModelTest {
             missingDataNotes = listOf("equipment not stored")
         )
 
-        coEvery { adminRepository.sendAdminAiChat(null, "Show inactive users", "LAST_30_DAYS", null, null) } returns Result.success(chatResponse)
+        coEvery {
+            adminRepository.sendAdminAiChatIdempotent(null, "Show inactive users", "LAST_30_DAYS", null, null, any())
+        } returns Result.success(chatResponse)
         coEvery { adminRepository.getAdminAiConversations() } returns Result.success(listOf(conv))
         coEvery { adminRepository.getAdminAiRecommendations(null, null) } returns Result.success(emptyList())
 
@@ -633,7 +637,7 @@ class AdminViewModelTest {
         )
 
         coEvery {
-            adminRepository.sendAdminAiChat(null, "Publish for last 14 days", "LAST_30_DAYS", null, null)
+            adminRepository.sendAdminAiChatIdempotent(null, "Publish for last 14 days", "LAST_30_DAYS", null, null, any())
         } returns Result.success(chatResponse)
         coEvery { adminRepository.getAdminAiConversations() } returns Result.success(listOf(conv))
         coEvery { adminRepository.getAdminAiRecommendations(null, null) } returns Result.success(emptyList())
@@ -719,7 +723,7 @@ class AdminViewModelTest {
         val assistantMsg = AdminAiMessage(2L, 13L, "ASSISTANT", "Confirm?", "CAMPAIGN_PUBLISH_CONFIRMATION", null)
 
         coEvery {
-            adminRepository.sendAdminAiChat(null, "Publish campaign", "LAST_30_DAYS", null, null)
+            adminRepository.sendAdminAiChatIdempotent(null, "Publish campaign", "LAST_30_DAYS", null, null, any())
         } returns Result.success(
             AdminAiChatResponse(
                 conversationId = 13L,
@@ -886,7 +890,9 @@ class AdminViewModelTest {
         val userMsg = AdminAiMessage(1L, 88L, "USER", "Grant PRO to user@example.com", null, null)
         val assistantMsg = AdminAiMessage(2L, 88L, "ASSISTANT", "Confirm grant PRO", "CONFIRMATION_REQUIRED", null)
 
-        coEvery { adminRepository.sendAdminAiChat(null, "Grant PRO to user@example.com", "LAST_30_DAYS") } returns Result.success(
+        coEvery {
+            adminRepository.sendAdminAiChatIdempotent(null, "Grant PRO to user@example.com", "LAST_30_DAYS", null, null, any())
+        } returns Result.success(
             AdminAiChatResponse(
                 conversationId = 88L,
                 conversationTitle = "PRO Management",
@@ -951,7 +957,9 @@ class AdminViewModelTest {
 
         val confirmMsg = AdminAiMessage(10L, 90L, "USER", "Confirm", null, null)
         val replyMsg = AdminAiMessage(11L, 90L, "ASSISTANT", "Admin-Granted PRO Revoked", "PRO_MANAGEMENT", null)
-        coEvery { adminRepository.sendAdminAiChat(90L, "Confirm", "LAST_30_DAYS") } returns Result.success(
+        coEvery {
+            adminRepository.sendAdminAiChatIdempotent(90L, "Confirm", "LAST_30_DAYS", null, null, any())
+        } returns Result.success(
             AdminAiChatResponse(
                 conversationId = 90L,
                 conversationTitle = "PRO Management",
@@ -987,6 +995,96 @@ class AdminViewModelTest {
 
         coVerify(exactly = 1) { analysisRepository.invalidateUserUsageCache() }
         assertEquals("Revoked admin-granted PRO for Paid Athlete. Paid subscription remains active.", viewModel.uiState.value.proActionMessage)
+    }
+
+    @Test
+    fun loadExercisesFiltered_andBulkPublish_updatesStateAndStats() = runTest {
+        val viewModel = AdminViewModel(adminRepository, authRepository)
+        val draft1 = testExercise(101L, "Pistol Squat", false).copy(status = "DRAFT", origin = "AI_RECOMMENDED")
+        val draft2 = testExercise(102L, "Cossack Squat", false).copy(status = "DRAFT", origin = "AI_RECOMMENDED")
+        val published1 = draft1.copy(active = true, status = "PUBLISHED")
+        val published2 = draft2.copy(active = true, status = "PUBLISHED")
+
+        coEvery {
+            adminRepository.getExercisesFiltered(0, 20, null, null, null, null, "DRAFT", "AI_RECOMMENDED", "name", "ASC")
+        } returns Result.success(AdminPage(listOf(draft1, draft2), 0, 20, 2, 1, false))
+        coEvery {
+            adminRepository.getExerciseStats()
+        } returns Result.success(
+            com.calisthenics.ai.domain.model.AdminExerciseStats(totalCount = 5L, publishedCount = 3L, draftCount = 2L, aiRecommendedCount = 2L)
+        )
+
+        viewModel.loadExercises(page = 0, status = "DRAFT", origin = "AI_RECOMMENDED")
+        viewModel.loadExerciseStats()
+        advanceUntilIdle()
+
+        assertEquals(2, viewModel.uiState.value.exercisePage?.content?.size)
+        assertEquals(2L, viewModel.uiState.value.exerciseStats?.draftCount)
+        assertTrue(viewModel.uiState.value.exercisePage?.content?.first()?.isAiRecommended == true)
+
+        viewModel.selectAllVisibleDraftExercises()
+        assertEquals(setOf(101L, 102L), viewModel.uiState.value.selectedExerciseIds)
+
+        coEvery { adminRepository.bulkUpdateExerciseStatus(listOf(101L, 102L), true) } returns Result.success(listOf(published1, published2))
+        coEvery {
+            adminRepository.getExercisesFiltered(0, 20, null, null, null, null, "DRAFT", "AI_RECOMMENDED", "name", "ASC")
+        } returns Result.success(AdminPage(emptyList(), 0, 20, 0, 1, false))
+
+        viewModel.bulkPublishSelectedExercises()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.selectedExerciseIds.isEmpty())
+        assertEquals("Published 2 exercise(s) to the public catalog.", viewModel.uiState.value.message)
+    }
+
+    @Test
+    fun sendAdminAiMessage_whenExercisesCreated_immediatelyRefreshesExercisesAndStats() = runTest {
+        val viewModel = AdminViewModel(adminRepository, authRepository)
+        val createdDraft = testExercise(201L, "Bulgarian Split Squat", false).copy(
+            category = "LEGS",
+            status = "DRAFT",
+            origin = "AI_RECOMMENDED"
+        )
+        val userMsg = AdminAiMessage(1L, 300L, "USER", "Add 3 leg exercises", "EXERCISE_DRAFT_CREATION", null)
+        val assistantMsg = AdminAiMessage(2L, 300L, "ASSISTANT", "Added 1 draft.", "EXERCISE_DRAFT_CREATION", null)
+
+        val response = AdminAiChatResponse(
+            conversationId = 300L,
+            conversationTitle = "Exercise Drafts Added",
+            userMessage = userMsg,
+            assistantMessage = assistantMsg,
+            intent = "EXERCISE_DRAFT_CREATION",
+            recommendations = emptyList(),
+            platformOverview = null,
+            trainingAnalytics = null,
+            suggestedFollowUps = emptyList(),
+            executedTools = listOf(
+                AdminToolExecution("create_exercise_drafts", "EXECUTED", "category=LEGS", "Saved 1 draft", 1L, 10L, null)
+            ),
+            createdExercises = listOf(createdDraft)
+        )
+
+        coEvery {
+            adminRepository.sendAdminAiChatIdempotent(null, "Add 3 leg exercises", "LAST_30_DAYS", null, null, any())
+        } returns Result.success(response)
+        coEvery { adminRepository.getAdminAiConversations() } returns Result.success(emptyList())
+        coEvery { adminRepository.getAdminAiRecommendations(null, null) } returns Result.success(emptyList())
+        coEvery {
+            adminRepository.getExercises(0, 20, null, null, null, null, "name", "ASC")
+        } returns Result.success(AdminPage(listOf(createdDraft), 0, 20, 1, 1, false))
+        coEvery {
+            adminRepository.getExerciseStats()
+        } returns Result.success(
+            com.calisthenics.ai.domain.model.AdminExerciseStats(totalCount = 1L, publishedCount = 0L, draftCount = 1L, aiRecommendedCount = 1L)
+        )
+
+        viewModel.sendAdminAiMessage("Add 3 leg exercises")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { adminRepository.getExercises(0, 20, null, null, null, null, "name", "ASC") }
+        assertEquals(1, viewModel.uiState.value.exercisePage?.content?.size)
+        assertEquals("DRAFT", viewModel.uiState.value.exercisePage?.content?.first()?.status)
+        assertEquals("AI_RECOMMENDED", viewModel.uiState.value.exercisePage?.content?.first()?.origin)
     }
 
     private fun testAdminUser(
@@ -1040,5 +1138,130 @@ class AdminViewModelTest {
     private fun httpError(statusCode: Int): HttpException {
         val body = "denied".toResponseBody("text/plain".toMediaType())
         return HttpException(Response.error<Unit>(statusCode, body))
+    }
+
+    @Test
+    fun `first message failure preserves prompt and retryLastAiMessage reuses exact same idempotencyKey`() = runTest {
+        val viewModel = AdminViewModel(adminRepository, authRepository)
+        coEvery { adminRepository.getAdminAiConversations() } returns Result.success(
+            listOf(AdminAiConversationSummary(42L, "Existing Session", "Hi", "ASSISTANT", null, null, 2))
+        )
+        coEvery { adminRepository.getAdminAiPlatformOverview(any(), any(), any()) } returns Result.failure(Exception("skip"))
+        coEvery { adminRepository.getAdminAiTrainingAnalytics(any(), any(), any()) } returns Result.failure(Exception("skip"))
+        coEvery { adminRepository.getAdminAiRecommendations(any(), any()) } returns Result.success(emptyList())
+        coEvery { adminRepository.getAdminAiConversationMessages(42L) } returns Result.success(emptyList())
+
+        val sentKeys = mutableListOf<String?>()
+        var attempt = 0
+        coEvery {
+            adminRepository.sendAdminAiChatIdempotent(42L, "Summarize activity", "LAST_30_DAYS", null, null, any())
+        } answers {
+            sentKeys += arg<String?>(5)
+            attempt++
+            if (attempt == 1) {
+                Result.failure(java.net.SocketTimeoutException("Temporary timeout"))
+            } else {
+                Result.success(
+                    AdminAiChatResponse(
+                        conversationId = 42L,
+                        conversationTitle = "Existing Session",
+                        userMessage = AdminAiMessage(1L, 42L, "USER", "Summarize activity", null, null),
+                        assistantMessage = AdminAiMessage(2L, 42L, "ASSISTANT", "Done", "PLATFORM_OVERVIEW", null),
+                        intent = "PLATFORM_OVERVIEW",
+                        recommendations = emptyList(),
+                        platformOverview = null,
+                        trainingAnalytics = null,
+                        suggestedFollowUps = emptyList()
+                    )
+                )
+            }
+        }
+
+        viewModel.loadAdminAiWorkspace()
+        viewModel.sendAdminAiMessage("Summarize activity")
+        advanceUntilIdle()
+
+        assertEquals("Summarize activity", viewModel.uiState.value.lastFailedAiPrompt)
+        assertEquals("Summarize activity", viewModel.uiState.value.restoredAiDraftPrompt)
+
+        viewModel.retryLastAiMessage()
+        advanceUntilIdle()
+
+        assertEquals(2, sentKeys.size)
+        assertEquals(sentKeys[0], sentKeys[1])
+        assertEquals(42L, viewModel.uiState.value.activeAiConversationId)
+        assertEquals(null, viewModel.uiState.value.lastFailedAiPrompt)
+        assertEquals(2, viewModel.uiState.value.aiMessages.size)
+    }
+
+    @Test
+    fun `startBulkExerciseGeneration polls running job until completed and reloads items`() = runTest {
+        val viewModel = AdminViewModel(adminRepository, authRepository)
+        val runningJob = BulkExerciseGenerationJob(
+            id = 500L,
+            jobUid = "BULK-TEST500",
+            conversationId = 42L,
+            prompt = "Generate 100 gym exercises",
+            trainingTypeFilter = "GYM",
+            categoriesFilter = null,
+            requestedQuantity = 100,
+            batchSize = 20,
+            generatedCount = 20,
+            duplicateCount = 0,
+            savedCount = 20,
+            failedCount = 0,
+            processedBatches = 1,
+            totalBatchesEstimated = 5,
+            progressPercent = 20,
+            status = "RUNNING",
+            errorMessage = null,
+            summaryPosted = false,
+            canResume = false,
+            statusMessage = "Running batch 1/5"
+        )
+        val completedJob = runningJob.copy(
+            generatedCount = 100,
+            savedCount = 100,
+            processedBatches = 5,
+            progressPercent = 100,
+            status = "COMPLETED",
+            summaryPosted = true,
+            statusMessage = "Completed: 100 saved."
+        )
+
+        coEvery {
+            adminRepository.startBulkExerciseGeneration(null, 100, "GYM", null, null, any(), any())
+        } returns Result.success(runningJob)
+        coEvery { adminRepository.getBulkExerciseGenerationJob(500L) } returns Result.success(completedJob)
+        coEvery { adminRepository.getAdminAiConversationMessages(42L) } returns Result.success(emptyList())
+        coEvery { adminRepository.getExercises(any(), any(), any(), any(), any(), any()) } returns Result.success(
+            AdminPage(emptyList(), 0, 20, 0, 1, false)
+        )
+        coEvery {
+            adminRepository.getBulkExerciseGenerationItems(500L, "SAVED", 0, 25)
+        } returns Result.success(
+            AdminPage(
+                content = listOf(
+                    BulkExerciseGenerationItem(1L, 1, 900L, "Barbell Front Squat", "BARBELL_FRONT_SQUAT", "GYM", "LEGS", "INTERMEDIATE", "SAVED", "Persisted", 1)
+                ),
+                page = 0,
+                size = 25,
+                totalElements = 1L,
+                totalPages = 1,
+                hasNext = false
+            )
+        )
+
+        viewModel.startBulkExerciseGeneration(100, "GYM")
+        dispatcher.scheduler.advanceTimeBy(1500L)
+        advanceUntilIdle()
+
+        assertEquals("COMPLETED", viewModel.uiState.value.activeBulkJob?.status)
+        assertEquals(100, viewModel.uiState.value.activeBulkJob?.savedCount)
+
+        viewModel.loadBulkJobItems(500L, "SAVED", 0)
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.bulkJobItemsPage?.content?.size)
+        assertEquals("Barbell Front Squat", viewModel.uiState.value.bulkJobItemsPage?.content?.first()?.exerciseName)
     }
 }

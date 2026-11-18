@@ -12,6 +12,11 @@ import com.calisthenics.ai.data.remote.dto.AdminCoachClientStatisticsDto
 import com.calisthenics.ai.data.remote.dto.AdminDashboardDto
 import com.calisthenics.ai.data.remote.dto.AdminExerciseDeleteResponseDto
 import com.calisthenics.ai.data.remote.dto.AdminExerciseDto
+import com.calisthenics.ai.data.remote.dto.AdminExerciseStatsDto
+import com.calisthenics.ai.data.remote.dto.BulkExerciseGenerationItemDto
+import com.calisthenics.ai.data.remote.dto.BulkExerciseGenerationJobDto
+import com.calisthenics.ai.data.remote.dto.BulkExerciseGenerationRequestDto
+import com.calisthenics.ai.data.remote.dto.BulkUpdateExerciseStatusRequestDto
 import com.calisthenics.ai.data.remote.dto.AdminGlobalUserStatisticsDto
 import com.calisthenics.ai.data.remote.dto.AdminGlobalUserSummaryDto
 import com.calisthenics.ai.data.remote.dto.AdminPageDto
@@ -89,7 +94,10 @@ class RemoteAdminDataSource @Inject constructor(
         difficulty: String?,
         active: Boolean?,
         sortBy: String = "name",
-        sortDirection: String = "ASC"
+        sortDirection: String = "ASC",
+        status: String? = null,
+        origin: String? = null,
+        trainingType: String? = null
     ): AdminPageDto<AdminExerciseDto> = api.getAdminExercises(
         page = page,
         size = size,
@@ -98,8 +106,40 @@ class RemoteAdminDataSource @Inject constructor(
         difficulty = difficulty,
         active = active,
         sortBy = sortBy,
-        sortDirection = sortDirection
+        sortDirection = sortDirection,
+        status = status,
+        origin = origin,
+        trainingType = trainingType
     )
+
+    suspend fun startBulkExerciseGeneration(
+        request: BulkExerciseGenerationRequestDto,
+        idempotencyKey: String? = null
+    ): BulkExerciseGenerationJobDto = api.startBulkExerciseGeneration(request, idempotencyKey)
+
+    suspend fun listBulkExerciseGenerationJobs(
+        page: Int = 0,
+        size: Int = 20
+    ): AdminPageDto<BulkExerciseGenerationJobDto> = api.listBulkExerciseGenerationJobs(page, size)
+
+    suspend fun getBulkExerciseGenerationJob(jobId: Long): BulkExerciseGenerationJobDto =
+        api.getBulkExerciseGenerationJob(jobId)
+
+    suspend fun getBulkExerciseGenerationItems(
+        jobId: Long,
+        outcome: String? = null,
+        page: Int = 0,
+        size: Int = 25
+    ): AdminPageDto<BulkExerciseGenerationItemDto> =
+        api.getBulkExerciseGenerationItems(jobId, outcome, page, size)
+
+    suspend fun resumeBulkExerciseGenerationJob(jobId: Long): BulkExerciseGenerationJobDto =
+        api.resumeBulkExerciseGenerationJob(jobId)
+
+    suspend fun getExerciseStats(): AdminExerciseStatsDto = api.getAdminExerciseStats()
+
+    suspend fun bulkUpdateExerciseStatus(exerciseIds: List<Long>, active: Boolean): List<AdminExerciseDto> =
+        api.bulkUpdateAdminExerciseStatus(BulkUpdateExerciseStatusRequestDto(exerciseIds = exerciseIds, active = active))
 
     suspend fun getExercise(exerciseId: Long): AdminExerciseDto =
         api.getAdminExercise(exerciseId)
@@ -121,15 +161,18 @@ class RemoteAdminDataSource @Inject constructor(
         message: String,
         range: String = "LAST_30_DAYS",
         startDate: String? = null,
-        endDate: String? = null
+        endDate: String? = null,
+        idempotencyKey: String? = null
     ): AdminAiChatResponseDto = api.sendAdminAiChat(
-        AdminAiChatRequestDto(
+        request = AdminAiChatRequestDto(
             conversationId = conversationId,
             message = message,
             range = range,
             startDate = startDate,
-            endDate = endDate
-        )
+            endDate = endDate,
+            idempotencyKey = idempotencyKey
+        ),
+        idempotencyKey = idempotencyKey
     )
 
     suspend fun resolveAdminAiConfirmation(

@@ -311,7 +311,7 @@ private fun AiChatEmptyWelcome(
         Spacer(Modifier.height(16.dp))
 
         Text(
-            text = "Calisthenics AI Assistant",
+            text = "SKY AI Assistant",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = PrimaryText

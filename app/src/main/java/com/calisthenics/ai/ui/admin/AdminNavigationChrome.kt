@@ -426,7 +426,7 @@ private fun AdminSidebarContent(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "Calisthenics AI",
+                    text = "SKY",
                     style = MaterialTheme.typography.labelSmall,
                     color = SecondaryText,
                     maxLines = 1

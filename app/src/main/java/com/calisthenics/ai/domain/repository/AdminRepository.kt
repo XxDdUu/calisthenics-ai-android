@@ -4,11 +4,14 @@ import com.calisthenics.ai.domain.model.AdminAiChatResponse
 import com.calisthenics.ai.domain.model.AdminAiConversationSummary
 import com.calisthenics.ai.domain.model.AdminAiMessage
 import com.calisthenics.ai.domain.model.AdminAiRecommendation
+import com.calisthenics.ai.domain.model.BulkExerciseGenerationItem
+import com.calisthenics.ai.domain.model.BulkExerciseGenerationJob
 import com.calisthenics.ai.domain.model.AdminCoachClientStatistics
 import com.calisthenics.ai.domain.model.AdminConfirmationDecision
 import com.calisthenics.ai.domain.model.AdminDashboard
 import com.calisthenics.ai.domain.model.AdminExercise
 import com.calisthenics.ai.domain.model.AdminExerciseDeleteResult
+import com.calisthenics.ai.domain.model.AdminExerciseStats
 import com.calisthenics.ai.domain.model.AdminGlobalUserStatistics
 import com.calisthenics.ai.domain.model.AdminGlobalUserSummary
 import com.calisthenics.ai.domain.model.AdminPage
@@ -95,6 +98,55 @@ interface AdminRepository {
         sortBy: String = "name",
         sortDirection: String = "ASC"
     ): Result<AdminPage<AdminExercise>>
+    suspend fun getExercisesFiltered(
+        page: Int,
+        size: Int,
+        search: String?,
+        category: String?,
+        difficulty: String?,
+        active: Boolean?,
+        status: String?,
+        origin: String?,
+        sortBy: String = "name",
+        sortDirection: String = "ASC"
+    ): Result<AdminPage<AdminExercise>> = getExercises(page, size, search, category, difficulty, active, sortBy, sortDirection)
+    suspend fun getExercisesFilteredWithTrainingType(
+        page: Int,
+        size: Int,
+        search: String?,
+        category: String?,
+        difficulty: String?,
+        active: Boolean?,
+        status: String?,
+        origin: String?,
+        trainingType: String? = null,
+        sortBy: String = "name",
+        sortDirection: String = "ASC"
+    ): Result<AdminPage<AdminExercise>> = getExercisesFiltered(page, size, search, category, difficulty, active, status, origin, sortBy, sortDirection)
+    suspend fun startBulkExerciseGeneration(
+        prompt: String?,
+        quantity: Int?,
+        trainingType: String?,
+        categories: List<String>?,
+        focus: String?,
+        conversationId: Long?,
+        idempotencyKey: String?
+    ): Result<BulkExerciseGenerationJob> = Result.failure(UnsupportedOperationException())
+    suspend fun listBulkExerciseGenerationJobs(page: Int = 0, size: Int = 20): Result<AdminPage<BulkExerciseGenerationJob>> =
+        Result.failure(UnsupportedOperationException())
+    suspend fun getBulkExerciseGenerationJob(jobId: Long): Result<BulkExerciseGenerationJob> =
+        Result.failure(UnsupportedOperationException())
+    suspend fun getBulkExerciseGenerationItems(
+        jobId: Long,
+        outcome: String? = null,
+        page: Int = 0,
+        size: Int = 25
+    ): Result<AdminPage<BulkExerciseGenerationItem>> = Result.failure(UnsupportedOperationException())
+    suspend fun resumeBulkExerciseGenerationJob(jobId: Long): Result<BulkExerciseGenerationJob> =
+        Result.failure(UnsupportedOperationException())
+    suspend fun getExerciseStats(): Result<AdminExerciseStats> = Result.failure(UnsupportedOperationException())
+    suspend fun bulkUpdateExerciseStatus(exerciseIds: List<Long>, active: Boolean): Result<List<AdminExercise>> =
+        Result.failure(UnsupportedOperationException())
     suspend fun getExercise(exerciseId: Long): Result<AdminExercise>
     suspend fun createExercise(
         name: String,
@@ -136,6 +188,14 @@ interface AdminRepository {
         startDate: String? = null,
         endDate: String? = null
     ): Result<AdminAiChatResponse>
+    suspend fun sendAdminAiChatIdempotent(
+        conversationId: Long?,
+        message: String,
+        range: String = "LAST_30_DAYS",
+        startDate: String? = null,
+        endDate: String? = null,
+        idempotencyKey: String? = null
+    ): Result<AdminAiChatResponse> = sendAdminAiChat(conversationId, message, range, startDate, endDate)
     suspend fun resolveAdminAiConfirmation(
         confirmationToken: String,
         approved: Boolean,

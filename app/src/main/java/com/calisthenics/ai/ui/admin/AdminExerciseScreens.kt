@@ -27,17 +27,23 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Publish
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,8 +52,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -83,7 +92,10 @@ import androidx.lifecycle.repeatOnLifecycle
 import coil.compose.AsyncImage
 import com.calisthenics.ai.domain.model.AdminExercise
 import com.calisthenics.ai.domain.model.AdminPage
+import com.calisthenics.ai.ui.theme.Accent
+import com.calisthenics.ai.ui.theme.Info
 import com.calisthenics.ai.ui.theme.Ink
+import com.calisthenics.ai.ui.theme.Warning
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -91,7 +103,12 @@ interface AdminMediaUploadEntryPoint {
     fun mediaUploadManager(): MediaUploadManager
 }
 
-private val EXERCISE_CATEGORIES = listOf("PUSH", "PULL", "CORE", "LEGS", "SKILL", "ISOMETRIC")
+private val EXERCISE_CATEGORIES = listOf(
+    "PUSH", "PULL", "CORE", "LEGS", "SKILL", "ISOMETRIC",
+    "FLEXIBILITY", "MOBILITY", "CHEST", "BACK", "SHOULDERS",
+    "BICEPS", "TRICEPS", "GLUTES", "FULL_BODY", "CARDIO"
+)
+private val TRAINING_TYPES = listOf("CALISTHENICS", "GYM", "BOTH")
 private val DIFFICULTY_LEVELS = listOf("BEGINNER", "INTERMEDIATE", "ADVANCED", "ELITE")
 
 @Composable
@@ -105,24 +122,31 @@ fun AdminExercisesScreen(
     val state by viewModel.uiState.collectAsState()
     var search by rememberSaveable { mutableStateOf("") }
     var categoryFilter by rememberSaveable { mutableStateOf<String?>(null) }
+    var trainingTypeFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var difficultyFilter by rememberSaveable { mutableStateOf<String?>(null) }
-    var activeFilter by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    var statusFilter by rememberSaveable { mutableStateOf<String?>(null) }
+    var originFilter by rememberSaveable { mutableStateOf<String?>(null) }
+    var showBulkGenerateDialog by remember { mutableStateOf(false) }
 
     var pendingDeleteExercise by remember { mutableStateOf<AdminExercise?>(null) }
     var conflictMessage by remember { mutableStateOf<String?>(null) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    LaunchedEffect(search, categoryFilter, difficultyFilter, activeFilter, lifecycleOwner) {
+    LaunchedEffect(search, categoryFilter, trainingTypeFilter, difficultyFilter, statusFilter, originFilter, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            kotlinx.coroutines.delay(300)
+            kotlinx.coroutines.delay(250)
             viewModel.loadExercises(
                 page = 0,
                 search = search,
                 category = categoryFilter,
                 difficulty = difficultyFilter,
-                active = activeFilter
+                active = null,
+                status = statusFilter,
+                origin = originFilter,
+                trainingType = trainingTypeFilter
             )
+            viewModel.loadExerciseStats()
             kotlinx.coroutines.awaitCancellation()
         }
     }
@@ -130,13 +154,20 @@ fun AdminExercisesScreen(
     AdminConsoleScaffold(
         currentSection = AdminNavSection.EXERCISES,
         title = stringResource(R.string.exercises),
-        subtitle = "Movement catalog & progressions",
+        subtitle = "Movement catalog, drafts & AI recommendations",
         navigation = adminNavigation,
         onBack = onBack,
         headerActions = {
             IconButton(
+                onClick = { showBulkGenerateDialog = true },
+                modifier = Modifier.size(38.dp)
+            ) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = "AI Bulk Generate")
+            }
+            IconButton(
                 onClick = {
-                    viewModel.loadExercises(0, search, categoryFilter, difficultyFilter, activeFilter)
+                    viewModel.loadExercises(0, search, categoryFilter, difficultyFilter, null, statusFilter, originFilter, trainingTypeFilter)
+                    viewModel.loadExerciseStats()
                 },
                 modifier = Modifier.size(38.dp)
             ) {
@@ -156,8 +187,41 @@ fun AdminExercisesScreen(
         Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
-            .padding(top = 12.dp, bottom = 10.dp)
+            .padding(top = 8.dp, bottom = 10.dp)
     ) {
+
+        val stats = state.exerciseStats
+        val statusTabs = listOf(
+            Triple<String?, String, Long?>(null, "All", stats?.totalCount),
+            Triple("DRAFT", "Draft", stats?.draftCount),
+            Triple("PUBLISHED", "Published", stats?.publishedCount)
+        )
+        val selectedTabIndex = statusTabs.indexOfFirst { it.first == statusFilter }.coerceAtLeast(0)
+
+        TabRow(
+            selectedTabIndex = selectedTabIndex,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            statusTabs.forEachIndexed { idx, (filterValue, label, count) ->
+                val tabLabel = if (count != null) "$label ($count)" else label
+                Tab(
+                    selected = selectedTabIndex == idx,
+                    onClick = {
+                        statusFilter = filterValue
+                        viewModel.clearExerciseSelection()
+                    },
+                    text = {
+                        Text(
+                            text = tabLabel,
+                            maxLines = 1,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
+                )
+            }
+        }
+
+        Spacer(Modifier.height(6.dp))
 
         // Search Input
         OutlinedTextField(
@@ -168,9 +232,28 @@ fun AdminExercisesScreen(
             singleLine = true
         )
 
-        // Filters
+        // Training Type Filters
         Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = trainingTypeFilter == null,
+                onClick = { trainingTypeFilter = null },
+                label = { Text("All Disciplines") }
+            )
+            TRAINING_TYPES.forEach { tType ->
+                FilterChip(
+                    selected = trainingTypeFilter == tType,
+                    onClick = { trainingTypeFilter = if (trainingTypeFilter == tType) null else tType },
+                    label = { Text(tType) }
+                )
+            }
+        }
+
+        // Category Filters
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             FilterChip(
@@ -187,10 +270,27 @@ fun AdminExercisesScreen(
             }
         }
 
+        // Difficulty & Origin Filters
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            val isAiSelected = originFilter == "AI_RECOMMENDED"
+            FilterChip(
+                selected = isAiSelected,
+                onClick = { originFilter = if (isAiSelected) null else "AI_RECOMMENDED" },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                label = {
+                    val countSuffix = stats?.aiRecommendedCount?.let { " ($it)" } ?: ""
+                    Text("AI Recommended$countSuffix")
+                }
+            )
             FilterChip(
                 selected = difficultyFilter == null,
                 onClick = { difficultyFilter = null },
@@ -205,28 +305,63 @@ fun AdminExercisesScreen(
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChip(
-                selected = activeFilter == null,
-                onClick = { activeFilter = null },
-                label = { Text(stringResource(R.string.loc_all_status)) }
-            )
-            FilterChip(
-                selected = activeFilter == true,
-                onClick = { activeFilter = if (activeFilter == true) null else true },
-                label = { Text(stringResource(R.string.loc_active)) }
-            )
-            FilterChip(
-                selected = activeFilter == false,
-                onClick = { activeFilter = if (activeFilter == false) null else false },
-                label = { Text(stringResource(R.string.loc_inactive)) }
-            )
+        val page = state.exercisePage
+        val visibleDraftsCount = page?.content?.count { it.isDraft } ?: 0
+        if (visibleDraftsCount > 0 || state.selectedExerciseIds.isNotEmpty()) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = if (state.selectedExerciseIds.isEmpty()) {
+                                "$visibleDraftsCount draft(s) ready for review"
+                            } else {
+                                "${state.selectedExerciseIds.size} selected"
+                            },
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                        if (visibleDraftsCount > 0) {
+                            TextButton(onClick = { viewModel.selectAllVisibleDraftExercises() }) {
+                                Text("Select Drafts")
+                            }
+                        }
+                        if (state.selectedExerciseIds.isNotEmpty()) {
+                            TextButton(onClick = { viewModel.clearExerciseSelection() }) {
+                                Text("Clear")
+                            }
+                        }
+                    }
+                    if (state.selectedExerciseIds.isNotEmpty()) {
+                        Button(
+                            onClick = { viewModel.bulkPublishSelectedExercises() },
+                            enabled = !state.isBulkUpdatingExercises,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Publish, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Publish (${state.selectedExerciseIds.size})")
+                        }
+                    }
+                }
+            }
         }
 
         // Error and Status Messages
+        state.activeBulkJob?.let { job ->
+            BulkExerciseGenerationStatusCard(
+                job = job,
+                onInspectItems = { outcome -> viewModel.loadBulkJobItems(job.id, outcome, 0) },
+                onResume = { viewModel.resumeBulkGenerationJob(job.id) },
+                onDismiss = viewModel::clearActiveBulkJob
+            )
+        }
         state.error?.let {
             Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 4.dp))
         }
@@ -242,7 +377,6 @@ fun AdminExercisesScreen(
             CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally).padding(24.dp))
         }
 
-        val page = state.exercisePage
         if (page != null) {
             if (page.content.isEmpty() && !state.isLoading) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -256,15 +390,17 @@ fun AdminExercisesScreen(
                     items(page.content, key = { it.id }) { exercise ->
                         AdminExerciseCard(
                             exercise = exercise,
+                            isSelected = exercise.id in state.selectedExerciseIds,
+                            onToggleSelection = { viewModel.toggleExerciseSelection(exercise.id) },
                             onEdit = { onEditExercise(exercise.id) },
-                            onToggleStatus = { viewModel.updateExerciseStatus(exercise.id, !exercise.active) },
+                            onToggleStatus = { viewModel.updateExerciseStatus(exercise.id, exercise.isDraft) },
                             onDelete = { pendingDeleteExercise = exercise }
                         )
                     }
                 }
             }
             AdminPageControls(page, onPageChange = {
-                viewModel.loadExercises(it, search, categoryFilter, difficultyFilter, activeFilter)
+                viewModel.loadExercises(it, search, categoryFilter, difficultyFilter, null, statusFilter, originFilter, trainingTypeFilter)
             })
         } else {
             Spacer(Modifier.weight(1f))
@@ -341,21 +477,53 @@ fun AdminExercisesScreen(
             }
         )
     }
+
+    if (showBulkGenerateDialog) {
+        BulkGenerationConfigDialog(
+            isSubmitting = state.isStartingBulkJob,
+            onDismiss = { showBulkGenerateDialog = false },
+            onStart = { qty, type, cats, focus ->
+                showBulkGenerateDialog = false
+                viewModel.startBulkExerciseGeneration(qty, type, cats, focus)
+            }
+        )
+    }
+
+    val bulkJob = state.activeBulkJob
+    val bulkItems = state.bulkJobItemsPage
+    if (bulkJob != null && bulkItems != null) {
+        BulkGenerationItemsDialog(
+            job = bulkJob,
+            itemsPage = bulkItems,
+            isLoading = state.isLoadingBulkJobItems,
+            outcomeFilter = state.bulkJobOutcomeFilter,
+            onSelectOutcome = { outcome -> viewModel.loadBulkJobItems(bulkJob.id, outcome, 0) },
+            onPageChange = { nextPage -> viewModel.loadBulkJobItems(bulkJob.id, state.bulkJobOutcomeFilter, nextPage) },
+            onOpenExercise = { id ->
+                viewModel.dismissBulkJobItems()
+                onEditExercise(id)
+            },
+            onDismiss = viewModel::dismissBulkJobItems
+        )
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AdminExerciseCard(
     exercise: AdminExercise,
+    isSelected: Boolean,
+    onToggleSelection: () -> Unit,
     onEdit: () -> Unit,
     onToggleStatus: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val isDraft = exercise.isDraft
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (exercise.active) MaterialTheme.colorScheme.surfaceVariant
-            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            containerColor = if (!isDraft) MaterialTheme.colorScheme.surfaceVariant
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
         )
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -365,6 +533,14 @@ private fun AdminExerciseCard(
                 verticalAlignment = Alignment.Top
             ) {
                 Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    if (isDraft || isSelected) {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = { onToggleSelection() },
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
                     if (!exercise.imageUrl.isNullOrBlank()) {
                         AsyncImage(
                             model = exercise.imageUrl,
@@ -375,24 +551,55 @@ private fun AdminExerciseCard(
                         Spacer(Modifier.width(12.dp))
                     }
                     Column {
-                        Text(exercise.name, style = MaterialTheme.typography.titleMedium)
+                        Text(exercise.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Code: ${exercise.code}",
+                            "${exercise.trainingType} · ${exercise.category} · Code: ${exercise.code}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                Surface(
-                    color = if (exercise.active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(12.dp)
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = if (exercise.active) "Active" else "Inactive",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (exercise.active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                    Surface(
+                        color = if (!isDraft) Accent.copy(alpha = 0.16f) else Warning.copy(alpha = 0.16f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = if (!isDraft) "Published" else "Draft",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (!isDraft) Accent else Warning,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                    if (exercise.isAiRecommended) {
+                        Surface(
+                            color = Info.copy(alpha = 0.16f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = Info,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Text(
+                                    text = "AI Recommended",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Info,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -447,11 +654,26 @@ private fun AdminExerciseCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedButton(
-                    onClick = onToggleStatus,
-                    modifier = Modifier.padding(end = 6.dp)
-                ) {
-                    Text(if (exercise.active) "Deactivate" else "Activate")
+                if (isDraft) {
+                    Button(
+                        onClick = onToggleStatus,
+                        modifier = Modifier.padding(end = 6.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Publish")
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = onToggleStatus,
+                        modifier = Modifier.padding(end = 6.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.Undo, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Return to Draft")
+                    }
                 }
                 IconButton(onClick = onEdit) {
                     Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.common_edit), tint = MaterialTheme.colorScheme.primary)
@@ -731,16 +953,42 @@ fun AdminExerciseFormScreen(
             onUploadStateChange = { isUploadingAdditionalMedia = it }
         )
 
-        // Active Switch
+        // Publication Switch & Origin Badge
+        if (isEditMode && state.exercise?.isAiRecommended == true) {
+            Surface(
+                color = Info.copy(alpha = 0.14f),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Info, modifier = Modifier.size(16.dp))
+                    Text(
+                        text = "Origin: AI Recommended",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Info
+                    )
+                }
+            }
+        }
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(stringResource(R.string.loc_active_status), style = MaterialTheme.typography.titleSmall)
+            Column(Modifier.weight(1f).padding(end = 12.dp)) {
                 Text(
-                    stringResource(R.string.loc_inactive_exercises_description),
+                    text = if (active) "Status: Published (Visible to Users)" else "Status: Draft (Admin Only)",
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(
+                    text = if (active) {
+                        "Available in the public user exercise catalog."
+                    } else {
+                        "Saved as draft and hidden from regular users until published."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

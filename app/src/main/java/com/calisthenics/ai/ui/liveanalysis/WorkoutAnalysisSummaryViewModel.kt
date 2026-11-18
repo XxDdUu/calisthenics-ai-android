@@ -184,7 +184,7 @@ class WorkoutAnalysisSummaryViewModel @Inject constructor(
     }
 
     fun buildShareSummaryText(session: LiveSessionRecord): String = buildString {
-        append("Calisthenics AI Workout Summary\n")
+        append("SKY Workout Summary\n")
         append("Exercise: ${session.exerciseDisplayName}\n")
         append("Duration: ${formatSummaryDuration(session.durationSeconds)}\n")
 

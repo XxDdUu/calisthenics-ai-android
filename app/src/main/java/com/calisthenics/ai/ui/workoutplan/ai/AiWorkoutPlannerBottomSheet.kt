@@ -130,6 +130,7 @@ import com.calisthenics.ai.domain.model.AiWorkoutPlanPreview
 import com.calisthenics.ai.domain.model.AiWorkoutSessionPreview
 import com.calisthenics.ai.domain.model.Gender
 import com.calisthenics.ai.domain.model.UserWorkoutPlan
+import com.calisthenics.ai.ui.components.aichat.MessageCopyButton
 import com.calisthenics.ai.ui.components.markdown.AiMarkdownText
 import com.calisthenics.ai.ui.theme.Accent
 import com.calisthenics.ai.ui.theme.Border
@@ -808,15 +809,28 @@ private fun UserMessageBubble(text: String) {
                 .wrapContentWidth(Alignment.End)
                 .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp))
                 .background(Accent)
-                .padding(12.dp)
+                .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 6.dp)
         ) {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    color = Ink,
-                    fontWeight = FontWeight.Medium
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = Ink,
+                        fontWeight = FontWeight.Medium
+                    )
                 )
-            )
+                Row(
+                    modifier = Modifier.align(Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MessageCopyButton(
+                        textToCopy = text,
+                        cleanMarkdown = false,
+                        tint = Ink.copy(alpha = 0.65f),
+                        copiedTint = Ink
+                    )
+                }
+            }
         }
     }
 }
@@ -851,12 +865,25 @@ private fun AiMessageBubble(text: String) {
                 .wrapContentWidth(Alignment.Start)
                 .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp))
                 .background(Elevated)
-                .padding(12.dp)
+                .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp)
         ) {
-            AiMarkdownText(
-                markdown = text,
-                color = PrimaryText
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                AiMarkdownText(
+                    markdown = text,
+                    color = PrimaryText
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MessageCopyButton(
+                        textToCopy = text,
+                        cleanMarkdown = true,
+                        tint = MutedText
+                    )
+                }
+            }
         }
     }
 }

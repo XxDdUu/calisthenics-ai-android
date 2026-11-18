@@ -515,4 +515,93 @@ object MarkdownParser {
             else -> https
         }
     }
+
+    /**
+     * Converts Markdown text into clean, human-readable plain text suitable for clipboard copying,
+     * preserving structure (headings, lists, paragraphs, tables, and code contents) without raw markers.
+     */
+    fun toPlainText(markdown: String): String {
+        if (markdown.isBlank()) return markdown
+        val blocks = parse(markdown)
+        if (blocks.isEmpty()) return markdown.trim()
+        val sb = StringBuilder()
+        appendBlocksPlainText(blocks, sb)
+        return sb.toString().trim()
+    }
+
+    private fun appendBlocksPlainText(blocks: List<MarkdownBlock>, sb: StringBuilder) {
+        blocks.forEachIndexed { index, block ->
+            if (index > 0 && sb.isNotEmpty() && !sb.endsWith("\n\n")) {
+                if (!sb.endsWith("\n")) sb.append("\n")
+                sb.append("\n")
+            }
+            when (block) {
+                is MarkdownBlock.Heading -> {
+                    sb.append(spansToPlainText(block.spans))
+                }
+                is MarkdownBlock.Paragraph -> {
+                    sb.append(spansToPlainText(block.spans))
+                }
+                is MarkdownBlock.CodeBlock -> {
+                    sb.append(block.code.trimEnd())
+                }
+                is MarkdownBlock.HorizontalRule -> {
+                    sb.append("---")
+                }
+                is MarkdownBlock.Blockquote -> {
+                    val nested = StringBuilder()
+                    appendBlocksPlainText(block.blocks, nested)
+                    val lines = nested.toString().trim().split("\n")
+                    sb.append(lines.joinToString("\n") { line ->
+                        if (line.isBlank()) "" else "> $line"
+                    })
+                }
+                is MarkdownBlock.ListGroup -> {
+                    block.items.forEachIndexed { itemIdx, item ->
+                        if (itemIdx > 0) sb.append("\n")
+                        val indent = "  ".repeat(item.depth.coerceAtLeast(0))
+                        val prefix = when {
+                            item.isChecked == true -> "[x] "
+                            item.isChecked == false -> "[ ] "
+                            item.isOrdered -> "${item.number ?: (itemIdx + 1)}. "
+                            else -> "• "
+                        }
+                        sb.append(indent).append(prefix).append(spansToPlainText(item.spans))
+                    }
+                }
+                is MarkdownBlock.Table -> {
+                    if (block.headers.isNotEmpty()) {
+                        sb.append(block.headers.joinToString(" | ") { spansToPlainText(it.spans) })
+                    }
+                    for (row in block.rows) {
+                        if (sb.isNotEmpty()) sb.append("\n")
+                        sb.append(row.joinToString(" | ") { spansToPlainText(it.spans) })
+                    }
+                }
+            }
+        }
+    }
+
+    private fun spansToPlainText(spans: List<MarkdownSpan>): String {
+        val sb = StringBuilder()
+        for (span in spans) {
+            when (span) {
+                is MarkdownSpan.Text -> sb.append(span.content)
+                is MarkdownSpan.Bold -> sb.append(spansToPlainText(span.content))
+                is MarkdownSpan.Italic -> sb.append(spansToPlainText(span.content))
+                is MarkdownSpan.BoldItalic -> sb.append(spansToPlainText(span.content))
+                is MarkdownSpan.Strikethrough -> sb.append(spansToPlainText(span.content))
+                is MarkdownSpan.InlineCode -> sb.append(span.code)
+                is MarkdownSpan.Link -> {
+                    val label = spansToPlainText(span.content).ifBlank { span.text }
+                    if (label == span.url || span.url.isBlank()) {
+                        sb.append(label)
+                    } else {
+                        sb.append("$label (${span.url})")
+                    }
+                }
+            }
+        }
+        return sb.toString()
+    }
 }

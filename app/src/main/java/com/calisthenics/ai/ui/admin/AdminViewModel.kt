@@ -6,10 +6,13 @@ import com.calisthenics.ai.data.remote.api.NetworkErrorParser
 import com.calisthenics.ai.domain.model.AdminAiConversationSummary
 import com.calisthenics.ai.domain.model.AdminAiMessage
 import com.calisthenics.ai.domain.model.AdminAiRecommendation
+import com.calisthenics.ai.domain.model.BulkExerciseGenerationItem
+import com.calisthenics.ai.domain.model.BulkExerciseGenerationJob
 import com.calisthenics.ai.domain.model.AdminCoachClientStatistics
 import com.calisthenics.ai.domain.model.AdminDashboard
 import com.calisthenics.ai.domain.model.AdminExercise
 import com.calisthenics.ai.domain.model.AdminExerciseDeleteResult
+import com.calisthenics.ai.domain.model.AdminExerciseStats
 import com.calisthenics.ai.domain.model.AdminGlobalUserStatistics
 import com.calisthenics.ai.domain.model.AdminGlobalUserSummary
 import com.calisthenics.ai.domain.model.AdminPage
@@ -37,6 +40,11 @@ import com.calisthenics.ai.domain.repository.AnalysisRepository
 import com.calisthenics.ai.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -45,6 +53,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
+import java.util.UUID
 
 data class AdminUiState(
     val isLoading: Boolean = false,
@@ -79,6 +88,9 @@ data class AdminUiState(
     val session: AdminWorkoutSessionDetail? = null,
     val exercisePage: AdminPage<AdminExercise>? = null,
     val exercise: AdminExercise? = null,
+    val exerciseStats: AdminExerciseStats? = null,
+    val selectedExerciseIds: Set<Long> = emptySet(),
+    val isBulkUpdatingExercises: Boolean = false,
     val aiConversations: List<AdminAiConversationSummary> = emptyList(),
     val activeAiConversationId: Long? = null,
     val aiMessages: List<AdminAiMessage> = emptyList(),
@@ -98,7 +110,14 @@ data class AdminUiState(
     val proSearchError: String? = null,
     val updatingProUserId: Long? = null,
     val proActionMessage: String? = null,
-    val proActionError: String? = null
+    val proActionError: String? = null,
+    val activeBulkJob: BulkExerciseGenerationJob? = null,
+    val bulkJobItemsPage: AdminPage<BulkExerciseGenerationItem>? = null,
+    val isLoadingBulkJobItems: Boolean = false,
+    val isStartingBulkJob: Boolean = false,
+    val bulkJobOutcomeFilter: String? = "SAVED",
+    val lastFailedAiPrompt: String? = null,
+    val restoredAiDraftPrompt: String? = null
 ) {
     companion object {
         val DEFAULT_ADMIN_AI_PROMPTS = listOf(
@@ -136,7 +155,14 @@ class AdminViewModel @Inject constructor(
     private var currentExerciseCategory: String? = null
     private var currentExerciseDifficulty: String? = null
     private var currentExerciseActive: Boolean? = null
+    private var currentExerciseStatus: String? = null
+    private var currentExerciseOrigin: String? = null
+    private var currentExerciseTrainingType: String? = null
     private var currentExercisePage = 0
+
+    private var workspaceInitJob: Job? = null
+    private var bulkPollJob: Job? = null
+    private var lastFailedAiKey: String? = null
 
     fun loadDashboard() {
         viewModelScope.launch {
@@ -251,27 +277,76 @@ class AdminViewModel @Inject constructor(
         search: String? = currentExerciseSearch,
         category: String? = currentExerciseCategory,
         difficulty: String? = currentExerciseDifficulty,
-        active: Boolean? = currentExerciseActive
+        active: Boolean? = currentExerciseActive,
+        status: String? = currentExerciseStatus,
+        origin: String? = currentExerciseOrigin,
+        trainingType: String? = currentExerciseTrainingType
     ) {
         currentExercisePage = page
         currentExerciseSearch = search
         currentExerciseCategory = category
         currentExerciseDifficulty = difficulty
         currentExerciseActive = active
+        currentExerciseStatus = status
+        currentExerciseOrigin = origin
+        currentExerciseTrainingType = trainingType
         viewModelScope.launch {
             beginLoading()
-            adminRepository.getExercises(
-                page = page,
-                size = PAGE_SIZE,
-                search = search?.takeIf(String::isNotBlank),
-                category = category,
-                difficulty = difficulty,
-                active = active
-            )
+            val result = if (status == null && origin == null && trainingType == null) {
+                adminRepository.getExercises(
+                    page = page,
+                    size = PAGE_SIZE,
+                    search = search?.takeIf(String::isNotBlank),
+                    category = category,
+                    difficulty = difficulty,
+                    active = active
+                )
+            } else if (trainingType == null) {
+                adminRepository.getExercisesFiltered(
+                    page = page,
+                    size = PAGE_SIZE,
+                    search = search?.takeIf(String::isNotBlank),
+                    category = category,
+                    difficulty = difficulty,
+                    active = active,
+                    status = status,
+                    origin = origin
+                )
+            } else {
+                adminRepository.getExercisesFilteredWithTrainingType(
+                    page = page,
+                    size = PAGE_SIZE,
+                    search = search?.takeIf(String::isNotBlank),
+                    category = category,
+                    difficulty = difficulty,
+                    active = active,
+                    status = status,
+                    origin = origin,
+                    trainingType = trainingType
+                )
+            }
+            result
                 .onSuccess { exercises ->
                     _uiState.update { it.copy(isLoading = false, exercisePage = exercises, error = null) }
                 }
                 .onFailure(::showError)
+        }
+    }
+
+    fun loadExerciseStats() {
+        viewModelScope.launch {
+            refreshExerciseStatsSilently()
+        }
+    }
+
+    private suspend fun refreshExerciseStatsSilently() {
+        try {
+            adminRepository.getExerciseStats()
+                .onSuccess { stats ->
+                    _uiState.update { it.copy(exerciseStats = stats) }
+                }
+        } catch (_: Throwable) {
+            // Safe no-op when unstubbed in unit tests
         }
     }
 
@@ -325,6 +400,7 @@ class AdminViewModel @Inject constructor(
                         )
                     }
                     loadExercises(page = 0)
+                    refreshExerciseStatsSilently()
                     onSuccess()
                 }
                 .onFailure { error ->
@@ -381,6 +457,7 @@ class AdminViewModel @Inject constructor(
                         )
                     }
                     loadExercises()
+                    refreshExerciseStatsSilently()
                     onSuccess()
                 }
                 .onFailure { error ->
@@ -399,18 +476,85 @@ class AdminViewModel @Inject constructor(
         viewModelScope.launch {
             adminRepository.updateExerciseStatus(exerciseId, active)
                 .onSuccess { updated ->
+                    val statusMsg = if (active) {
+                        "Published '${updated.name}' to the user exercise catalog."
+                    } else {
+                        "Returned '${updated.name}' to Draft."
+                    }
                     _uiState.update { state ->
                         val updatedPage = state.exercisePage?.let { page ->
-                            page.copy(content = page.content.map { if (it.id == exerciseId) updated else it })
+                            val newList = if (currentExerciseStatus != null &&
+                                !updated.status.equals(currentExerciseStatus, ignoreCase = true)
+                            ) {
+                                page.content.filterNot { it.id == exerciseId }
+                            } else {
+                                page.content.map { if (it.id == exerciseId) updated else it }
+                            }
+                            page.copy(content = newList)
                         }
                         state.copy(
                             exercise = if (state.exercise?.id == exerciseId) updated else state.exercise,
                             exercisePage = updatedPage,
-                            message = "Exercise status updated to ${if (active) "Active" else "Inactive"}."
+                            selectedExerciseIds = state.selectedExerciseIds - exerciseId,
+                            message = statusMsg
+                        )
+                    }
+                    refreshExerciseStatsSilently()
+                }
+                .onFailure(::showError)
+        }
+    }
+
+    fun toggleExerciseSelection(exerciseId: Long) {
+        _uiState.update { state ->
+            val updated = if (exerciseId in state.selectedExerciseIds) {
+                state.selectedExerciseIds - exerciseId
+            } else {
+                state.selectedExerciseIds + exerciseId
+            }
+            state.copy(selectedExerciseIds = updated)
+        }
+    }
+
+    fun selectAllVisibleDraftExercises() {
+        val visibleDraftIds = _uiState.value.exercisePage?.content
+            ?.filter { it.isDraft }
+            ?.map { it.id }
+            ?.toSet()
+            ?: emptySet()
+        _uiState.update { it.copy(selectedExerciseIds = visibleDraftIds) }
+    }
+
+    fun clearExerciseSelection() {
+        _uiState.update { it.copy(selectedExerciseIds = emptySet()) }
+    }
+
+    fun bulkPublishSelectedExercises() {
+        val ids = _uiState.value.selectedExerciseIds.toList()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isBulkUpdatingExercises = true, error = null, message = null) }
+            adminRepository.bulkUpdateExerciseStatus(ids, active = true)
+                .onSuccess { updatedList ->
+                    _uiState.update { state ->
+                        state.copy(
+                            isBulkUpdatingExercises = false,
+                            selectedExerciseIds = emptySet(),
+                            message = "Published ${updatedList.size} exercise(s) to the public catalog."
+                        )
+                    }
+                    loadExercises()
+                    refreshExerciseStatsSilently()
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            isBulkUpdatingExercises = false,
+                            error = NetworkErrorParser.toUserMessage(error),
+                            authorizationErrorCode = authorizationErrorCode(error)
                         )
                     }
                 }
-                .onFailure(::showError)
         }
     }
 
@@ -444,6 +588,7 @@ class AdminViewModel @Inject constructor(
                         )
                     }
                     onSuccess(result)
+                    refreshExerciseStatsSilently()
                 }
                 .onFailure { error ->
                     _uiState.update { it.copy(isDeletingExercise = false) }
@@ -466,36 +611,56 @@ class AdminViewModel @Inject constructor(
     }
 
     fun loadAdminAiWorkspace(range: String = _uiState.value.aiAnalyticsRange) {
-        viewModelScope.launch {
+        workspaceInitJob?.cancel()
+        workspaceInitJob = viewModelScope.launch {
+            val capturedConversationId = _uiState.value.activeAiConversationId
             _uiState.update { it.copy(isLoading = true, aiAnalyticsRange = range, error = null) }
-            val conversationsResult = adminRepository.getAdminAiConversations()
-            val overviewResult = adminRepository.getAdminAiPlatformOverview(range = range)
-            val trainingResult = adminRepository.getAdminAiTrainingAnalytics(range = range)
-            val recommendationsResult = adminRepository.getAdminAiRecommendations()
+            coroutineScope {
+                val conversationsDeferred = async { adminRepository.getAdminAiConversations() }
+                val overviewDeferred = async { adminRepository.getAdminAiPlatformOverview(range = range) }
+                val trainingDeferred = async { adminRepository.getAdminAiTrainingAnalytics(range = range) }
+                val recommendationsDeferred = async { adminRepository.getAdminAiRecommendations() }
 
-            val conversations = conversationsResult.getOrDefault(emptyList())
-            val selectedId = _uiState.value.activeAiConversationId ?: conversations.firstOrNull()?.id
-            val messages = if (selectedId != null) {
-                adminRepository.getAdminAiConversationMessages(selectedId).getOrDefault(emptyList())
-            } else {
-                emptyList()
-            }
+                val conversationsResult = conversationsDeferred.await()
+                val overviewResult = overviewDeferred.await()
+                val trainingResult = trainingDeferred.await()
+                val recommendationsResult = recommendationsDeferred.await()
 
-            val firstError = listOf(conversationsResult, overviewResult, trainingResult, recommendationsResult)
-                .firstNotNullOfOrNull { it.exceptionOrNull() }
+                val conversations = conversationsResult.getOrDefault(emptyList())
+                val selectedId = _uiState.value.activeAiConversationId
+                    ?: capturedConversationId
+                    ?: conversations.firstOrNull()?.id
+                val messages = if (selectedId != null) {
+                    adminRepository.getAdminAiConversationMessages(selectedId).getOrDefault(emptyList())
+                } else {
+                    emptyList()
+                }
 
-            _uiState.update { state ->
-                state.copy(
-                    isLoading = false,
-                    aiConversations = conversations,
-                    activeAiConversationId = selectedId,
-                    aiMessages = messages,
-                    aiPlatformOverview = overviewResult.getOrNull() ?: state.aiPlatformOverview,
-                    aiTrainingAnalytics = trainingResult.getOrNull() ?: state.aiTrainingAnalytics,
-                    aiRecommendations = recommendationsResult.getOrNull() ?: state.aiRecommendations,
-                    error = firstError?.let(NetworkErrorParser::toUserMessage),
-                    authorizationErrorCode = firstError?.let(::authorizationErrorCode)
-                )
+                val firstError = listOf(conversationsResult, overviewResult, trainingResult, recommendationsResult)
+                    .firstNotNullOfOrNull { it.exceptionOrNull() }
+
+                _uiState.update { state ->
+                    val resolvedActiveId = state.activeAiConversationId ?: selectedId
+                    val switchedAway = state.activeAiConversationId != null && state.activeAiConversationId != selectedId
+                    val pendingOptimistic = state.aiMessages.filter { it.id < 0L }
+                    val mergedMessages = when {
+                        switchedAway -> state.aiMessages
+                        selectedId != null -> messages + pendingOptimistic
+                        state.aiMessages.isNotEmpty() -> state.aiMessages
+                        else -> messages
+                    }
+                    state.copy(
+                        isLoading = false,
+                        aiConversations = conversations.ifEmpty { state.aiConversations },
+                        activeAiConversationId = resolvedActiveId,
+                        aiMessages = mergedMessages,
+                        aiPlatformOverview = overviewResult.getOrNull() ?: state.aiPlatformOverview,
+                        aiTrainingAnalytics = trainingResult.getOrNull() ?: state.aiTrainingAnalytics,
+                        aiRecommendations = recommendationsResult.getOrNull() ?: state.aiRecommendations,
+                        error = if (state.isSendingAiMessage) state.error else firstError?.let(NetworkErrorParser::toUserMessage),
+                        authorizationErrorCode = firstError?.let(::authorizationErrorCode)
+                    )
+                }
             }
         }
     }
@@ -543,15 +708,15 @@ class AdminViewModel @Inject constructor(
         }
     }
 
-    fun sendAdminAiMessage(prompt: String) {
+    fun sendAdminAiMessage(prompt: String, explicitIdempotencyKey: String? = null) {
         val trimmed = prompt.trim()
-        if (trimmed.isEmpty()) return
-        val currentConvId = _uiState.value.activeAiConversationId
+        if (trimmed.isEmpty() || _uiState.value.isSendingAiMessage) return
         val currentRange = _uiState.value.aiAnalyticsRange
+        val requestKey = explicitIdempotencyKey ?: UUID.randomUUID().toString()
 
         val optimisticUserMsg = AdminAiMessage(
             id = -System.currentTimeMillis(),
-            conversationId = currentConvId ?: 0L,
+            conversationId = _uiState.value.activeAiConversationId ?: 0L,
             role = "USER",
             content = trimmed,
             intent = null,
@@ -564,15 +729,26 @@ class AdminViewModel @Inject constructor(
                     isSendingAiMessage = true,
                     error = null,
                     message = null,
+                    lastFailedAiPrompt = null,
                     aiMessages = state.aiMessages + optimisticUserMsg
                 )
             }
-            adminRepository.sendAdminAiChat(
+
+            // Wait for any in-flight workspace bootstrap so activeAiConversationId is settled before first send
+            val initJob = workspaceInitJob
+            if (initJob != null && initJob.isActive) {
+                initJob.join()
+            }
+            val currentConvId = _uiState.value.activeAiConversationId
+
+            adminRepository.sendAdminAiChatIdempotent(
                 conversationId = currentConvId,
                 message = trimmed,
-                range = currentRange
+                range = currentRange,
+                idempotencyKey = requestKey
             )
                 .onSuccess { response ->
+                    lastFailedAiKey = null
                     val conversations = adminRepository.getAdminAiConversations()
                         .getOrDefault(_uiState.value.aiConversations)
                     val allRecommendations = adminRepository.getAdminAiRecommendations()
@@ -615,7 +791,10 @@ class AdminViewModel @Inject constructor(
                                 state.aiActiveCampaigns
                             },
                             aiCampaignAnalytics = response.campaignAnalytics,
-                            aiPendingConfirmation = response.pendingConfirmation
+                            aiPendingConfirmation = response.pendingConfirmation,
+                            activeBulkJob = response.bulkGenerationJob ?: state.activeBulkJob,
+                            lastFailedAiPrompt = null,
+                            restoredAiDraftPrompt = null
                         )
                     }
                     val updatedPro = response.updatedProUser
@@ -636,18 +815,185 @@ class AdminViewModel @Inject constructor(
                         applyUpdatedProUser(safeUpdatedPro, msg)
                         refreshProSearchAndDetailAfterChange(safeUpdatedPro.id)
                     }
+                    val bulkJob = response.bulkGenerationJob
+                    if (bulkJob != null) {
+                        if (bulkJob.status in setOf("PENDING", "RUNNING")) {
+                            startBulkJobPolling(bulkJob.id)
+                        } else {
+                            loadExercises(page = 0)
+                            refreshExerciseStatsSilently()
+                        }
+                    } else {
+                        val exercisesMutated = response.createdExercises.isNotEmpty() ||
+                            response.executedTools.any {
+                                it.toolName.equals("create_exercise_drafts", ignoreCase = true) &&
+                                    it.status.equals("EXECUTED", ignoreCase = true)
+                            }
+                        if (exercisesMutated) {
+                            loadExercises(page = 0)
+                            refreshExerciseStatsSilently()
+                        }
+                    }
                 }
                 .onFailure { error ->
+                    lastFailedAiKey = requestKey
                     _uiState.update { state ->
                         state.copy(
                             isSendingAiMessage = false,
                             aiMessages = state.aiMessages.filterNot { it.id == optimisticUserMsg.id },
                             error = NetworkErrorParser.toUserMessage(error),
-                            authorizationErrorCode = authorizationErrorCode(error)
+                            authorizationErrorCode = authorizationErrorCode(error),
+                            lastFailedAiPrompt = trimmed,
+                            restoredAiDraftPrompt = trimmed
                         )
                     }
                 }
         }
+    }
+
+    fun retryLastAiMessage() {
+        val prompt = _uiState.value.lastFailedAiPrompt ?: return
+        val key = lastFailedAiKey ?: UUID.randomUUID().toString()
+        sendAdminAiMessage(prompt = prompt, explicitIdempotencyKey = key)
+    }
+
+    fun consumeRestoredAiDraftPrompt() {
+        _uiState.update { it.copy(restoredAiDraftPrompt = null) }
+    }
+
+    fun startBulkExerciseGeneration(
+        quantity: Int,
+        trainingType: String = "BOTH",
+        categories: List<String> = emptyList(),
+        focus: String? = null,
+        customPrompt: String? = null
+    ) {
+        if (_uiState.value.isStartingBulkJob) return
+        val convId = _uiState.value.activeAiConversationId
+        val idempotencyKey = "bulk-ui-" + UUID.randomUUID().toString()
+        viewModelScope.launch {
+            _uiState.update { it.copy(isStartingBulkJob = true, error = null, message = null) }
+            adminRepository.startBulkExerciseGeneration(
+                prompt = customPrompt?.takeIf { it.isNotBlank() },
+                quantity = quantity,
+                trainingType = trainingType,
+                categories = categories.takeIf { it.isNotEmpty() },
+                focus = focus?.takeIf { it.isNotBlank() },
+                conversationId = convId,
+                idempotencyKey = idempotencyKey
+            )
+                .onSuccess { job ->
+                    _uiState.update {
+                        it.copy(
+                            isStartingBulkJob = false,
+                            activeBulkJob = job,
+                            message = "Bulk generation job ${job.jobUid} started (${job.statusMessage})."
+                        )
+                    }
+                    if (job.status in setOf("PENDING", "RUNNING")) {
+                        startBulkJobPolling(job.id)
+                    } else {
+                        refreshAfterBulkTerminal(job)
+                    }
+                }
+                .onFailure { err ->
+                    _uiState.update {
+                        it.copy(
+                            isStartingBulkJob = false,
+                            error = NetworkErrorParser.toUserMessage(err),
+                            authorizationErrorCode = authorizationErrorCode(err)
+                        )
+                    }
+                }
+        }
+    }
+
+    fun resumeBulkGenerationJob(jobId: Long) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isStartingBulkJob = true, error = null) }
+            adminRepository.resumeBulkExerciseGenerationJob(jobId)
+                .onSuccess { job ->
+                    _uiState.update {
+                        it.copy(isStartingBulkJob = false, activeBulkJob = job)
+                    }
+                    if (job.status in setOf("PENDING", "RUNNING")) {
+                        startBulkJobPolling(job.id)
+                    } else {
+                        refreshAfterBulkTerminal(job)
+                    }
+                }
+                .onFailure { err ->
+                    _uiState.update {
+                        it.copy(
+                            isStartingBulkJob = false,
+                            error = NetworkErrorParser.toUserMessage(err)
+                        )
+                    }
+                }
+        }
+    }
+
+    fun loadBulkJobItems(
+        jobId: Long,
+        outcome: String? = _uiState.value.bulkJobOutcomeFilter,
+        page: Int = 0
+    ) {
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(isLoadingBulkJobItems = true, bulkJobOutcomeFilter = outcome)
+            }
+            adminRepository.getBulkExerciseGenerationItems(jobId, outcome, page, 25)
+                .onSuccess { itemPage ->
+                    _uiState.update {
+                        it.copy(isLoadingBulkJobItems = false, bulkJobItemsPage = itemPage)
+                    }
+                }
+                .onFailure { err ->
+                    _uiState.update {
+                        it.copy(
+                            isLoadingBulkJobItems = false,
+                            error = NetworkErrorParser.toUserMessage(err)
+                        )
+                    }
+                }
+        }
+    }
+
+    fun dismissBulkJobItems() {
+        _uiState.update { it.copy(bulkJobItemsPage = null) }
+    }
+
+    fun clearActiveBulkJob() {
+        bulkPollJob?.cancel()
+        _uiState.update { it.copy(activeBulkJob = null, bulkJobItemsPage = null) }
+    }
+
+    private fun startBulkJobPolling(jobId: Long) {
+        bulkPollJob?.cancel()
+        bulkPollJob = viewModelScope.launch {
+            repeat(180) {
+                delay(1000L)
+                val res = adminRepository.getBulkExerciseGenerationJob(jobId)
+                val job = res.getOrNull() ?: return@repeat
+                _uiState.update { it.copy(activeBulkJob = job) }
+                if (job.status !in setOf("PENDING", "RUNNING")) {
+                    refreshAfterBulkTerminal(job)
+                    return@launch
+                }
+            }
+        }
+    }
+
+    private suspend fun refreshAfterBulkTerminal(job: BulkExerciseGenerationJob) {
+        val convId = job.conversationId ?: _uiState.value.activeAiConversationId
+        if (convId != null) {
+            adminRepository.getAdminAiConversationMessages(convId)
+                .onSuccess { refreshed ->
+                    _uiState.update { it.copy(aiMessages = refreshed, activeAiConversationId = convId) }
+                }
+        }
+        loadExercises(page = 0)
+        refreshExerciseStatsSilently()
     }
 
     /** Approves or cancels the pending Admin AI Getting Started publish/unpublish confirmation. */

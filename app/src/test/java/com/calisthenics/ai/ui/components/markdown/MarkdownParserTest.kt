@@ -162,14 +162,14 @@ class MarkdownParserTest {
 
     @Test
     fun test7_linksAndAutolinks() {
-        val textWithLink = "Visit [Calisthenics AI](https://calisthenics-ai.app) or https://google.com for info."
+        val textWithLink = "Visit [SKY](https://sky-enterprise.id.vn) or https://google.com for info."
         val spans = MarkdownParser.parseInline(textWithLink)
 
         val links = spans.filterIsInstance<MarkdownSpan.Link>()
         assertEquals(2, links.size)
 
-        assertEquals("Calisthenics AI", links[0].text)
-        assertEquals("https://calisthenics-ai.app", links[0].url)
+        assertEquals("SKY", links[0].text)
+        assertEquals("https://sky-enterprise.id.vn", links[0].url)
 
         assertEquals("https://google.com", links[1].text)
         assertEquals("https://google.com", links[1].url)

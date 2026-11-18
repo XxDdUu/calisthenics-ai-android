@@ -1,6 +1,8 @@
 package com.calisthenics.ai.data.mapper
 
 import com.calisthenics.ai.data.remote.dto.AdminAiChatResponseDto
+import com.calisthenics.ai.data.remote.dto.BulkExerciseGenerationItemDto
+import com.calisthenics.ai.data.remote.dto.BulkExerciseGenerationJobDto
 import com.calisthenics.ai.data.remote.dto.AdminConfirmationDecisionResponseDto
 import com.calisthenics.ai.data.remote.dto.AdminPendingConfirmationDto
 import com.calisthenics.ai.data.remote.dto.GettingStartedCampaignAnalyticsDto
@@ -12,6 +14,7 @@ import com.calisthenics.ai.data.remote.dto.AdminAiRecommendationDto
 import com.calisthenics.ai.data.remote.dto.AdminDashboardDto
 import com.calisthenics.ai.data.remote.dto.AdminExerciseDeleteResponseDto
 import com.calisthenics.ai.data.remote.dto.AdminExerciseDto
+import com.calisthenics.ai.data.remote.dto.AdminExerciseStatsDto
 import com.calisthenics.ai.data.remote.dto.AdminExerciseUsageStatDto
 import com.calisthenics.ai.data.remote.dto.AdminGoalStatDto
 import com.calisthenics.ai.data.remote.dto.AdminInactiveUsersSummaryDto
@@ -32,6 +35,8 @@ import com.calisthenics.ai.data.remote.dto.ProgramDayPayloadDto
 import com.calisthenics.ai.data.remote.dto.ProgramExercisePayloadDto
 import com.calisthenics.ai.data.remote.dto.WorkoutProgramRecommendationPayloadDto
 import com.calisthenics.ai.domain.model.AdminAiChatResponse
+import com.calisthenics.ai.domain.model.BulkExerciseGenerationItem
+import com.calisthenics.ai.domain.model.BulkExerciseGenerationJob
 import com.calisthenics.ai.domain.model.AdminConfirmationDecision
 import com.calisthenics.ai.domain.model.AdminPendingConfirmation
 import com.calisthenics.ai.domain.model.GettingStartedCampaignAnalytics
@@ -43,6 +48,7 @@ import com.calisthenics.ai.domain.model.AdminAiRecommendation
 import com.calisthenics.ai.domain.model.AdminDashboard
 import com.calisthenics.ai.domain.model.AdminExercise
 import com.calisthenics.ai.domain.model.AdminExerciseDeleteResult
+import com.calisthenics.ai.domain.model.AdminExerciseStats
 import com.calisthenics.ai.domain.model.AdminExerciseUsageStat
 import com.calisthenics.ai.domain.model.AdminGoalStat
 import com.calisthenics.ai.domain.model.AdminInactiveUsersSummary
@@ -212,7 +218,26 @@ fun AdminExerciseDto.toDomain() = AdminExercise(
     planReferencesCount = planReferencesCount,
     sessionReferencesCount = sessionReferencesCount,
     canDelete = canDelete,
-    mediaItems = mediaItems.mapIndexedNotNull { index, item -> item.toDomainOrNull(index) }
+    mediaItems = mediaItems.mapIndexedNotNull { index, item -> item.toDomainOrNull(index) },
+    status = status?.takeIf { it.isNotBlank() } ?: if (active) "PUBLISHED" else "DRAFT",
+    origin = origin?.takeIf { it.isNotBlank() } ?: "MANUAL",
+    trainingType = trainingType?.takeIf { it.isNotBlank() } ?: "CALISTHENICS",
+    secondaryMuscles = secondaryMuscles,
+    exerciseType = exerciseType,
+    recommendedSets = recommendedSets,
+    recommendedReps = recommendedReps,
+    recommendedRestSeconds = recommendedRestSeconds,
+    commonMistakes = commonMistakes,
+    safetyConsiderations = safetyConsiderations,
+    progressionNotes = progressionNotes,
+    aliases = aliases
+)
+
+fun AdminExerciseStatsDto.toDomain() = AdminExerciseStats(
+    totalCount = totalCount,
+    publishedCount = publishedCount,
+    draftCount = draftCount,
+    aiRecommendedCount = aiRecommendedCount
 )
 
 fun AdminExerciseDeleteResponseDto.toDomain() = AdminExerciseDeleteResult(
@@ -265,7 +290,9 @@ fun AdminAiChatResponseDto.toDomain() = AdminAiChatResponse(
     pendingConfirmation = pendingConfirmation?.toDomain(),
     missingDataNotes = missingDataNotes,
     updatedProUser = updatedProUser?.toDomain(),
-    proCandidates = proCandidates.map { it.toDomain() }
+    proCandidates = proCandidates.map { it.toDomain() },
+    createdExercises = createdExercises.map { it.toDomain() },
+    bulkGenerationJob = bulkGenerationJob?.toDomain()
 )
 
 fun GettingStartedProgramPreviewDto.toDomain() = GettingStartedProgramPreview(
@@ -844,4 +871,47 @@ fun OperationalRecommendationPayloadDto.toDomain() = OperationalRecommendationDe
     suggestedAction = suggestedAction,
     expectedBenefit = expectedBenefit,
     affectedArea = affectedArea
+)
+
+fun BulkExerciseGenerationJobDto.toDomain() = BulkExerciseGenerationJob(
+    id = id,
+    jobUid = jobUid,
+    conversationId = conversationId,
+    prompt = prompt,
+    trainingTypeFilter = trainingTypeFilter,
+    categoriesFilter = categoriesFilter,
+    requestedQuantity = requestedQuantity,
+    batchSize = batchSize,
+    generatedCount = generatedCount,
+    duplicateCount = duplicateCount,
+    savedCount = savedCount,
+    failedCount = failedCount,
+    processedBatches = processedBatches,
+    totalBatchesEstimated = totalBatchesEstimated,
+    progressPercent = progressPercent,
+    status = status,
+    errorMessage = errorMessage,
+    summaryPosted = summaryPosted,
+    canResume = canResume,
+    statusMessage = statusMessage,
+    skippedDuplicateSamples = skippedDuplicateSamples,
+    createdAt = createdAt,
+    startedAt = startedAt,
+    completedAt = completedAt,
+    updatedAt = updatedAt
+)
+
+fun BulkExerciseGenerationItemDto.toDomain() = BulkExerciseGenerationItem(
+    id = id,
+    sequenceNumber = sequenceNumber,
+    exerciseId = exerciseId,
+    exerciseName = exerciseName,
+    exerciseCode = exerciseCode,
+    trainingType = trainingType,
+    category = category,
+    difficulty = difficulty,
+    outcome = outcome,
+    reason = reason,
+    batchNumber = batchNumber,
+    createdAt = createdAt
 )

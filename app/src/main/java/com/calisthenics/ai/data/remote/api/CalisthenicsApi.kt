@@ -28,6 +28,11 @@ import com.calisthenics.ai.data.remote.dto.AdminCoachClientStatisticsDto
 import com.calisthenics.ai.data.remote.dto.AdminDashboardDto
 import com.calisthenics.ai.data.remote.dto.AdminExerciseDeleteResponseDto
 import com.calisthenics.ai.data.remote.dto.AdminExerciseDto
+import com.calisthenics.ai.data.remote.dto.AdminExerciseStatsDto
+import com.calisthenics.ai.data.remote.dto.BulkExerciseGenerationItemDto
+import com.calisthenics.ai.data.remote.dto.BulkExerciseGenerationJobDto
+import com.calisthenics.ai.data.remote.dto.BulkExerciseGenerationRequestDto
+import com.calisthenics.ai.data.remote.dto.BulkUpdateExerciseStatusRequestDto
 import com.calisthenics.ai.data.remote.dto.AdminGlobalUserStatisticsDto
 import com.calisthenics.ai.data.remote.dto.AdminGlobalUserSummaryDto
 import com.calisthenics.ai.data.remote.dto.AdminPageDto
@@ -208,8 +213,49 @@ interface CalisthenicsApi {
         @Query("difficulty") difficulty: String?,
         @Query("active") active: Boolean?,
         @Query("sortBy") sortBy: String,
-        @Query("sortDirection") sortDirection: String
+        @Query("sortDirection") sortDirection: String,
+        @Query("status") status: String? = null,
+        @Query("origin") origin: String? = null,
+        @Query("trainingType") trainingType: String? = null
     ): AdminPageDto<AdminExerciseDto>
+
+    @POST("api/v1/admin/exercises/bulk-generate")
+    suspend fun startBulkExerciseGeneration(
+        @Body request: BulkExerciseGenerationRequestDto,
+        @Header("Idempotency-Key") idempotencyKey: String? = null
+    ): BulkExerciseGenerationJobDto
+
+    @GET("api/v1/admin/exercises/bulk-generate")
+    suspend fun listBulkExerciseGenerationJobs(
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20
+    ): AdminPageDto<BulkExerciseGenerationJobDto>
+
+    @GET("api/v1/admin/exercises/bulk-generate/{jobId}")
+    suspend fun getBulkExerciseGenerationJob(
+        @Path("jobId") jobId: Long
+    ): BulkExerciseGenerationJobDto
+
+    @GET("api/v1/admin/exercises/bulk-generate/{jobId}/items")
+    suspend fun getBulkExerciseGenerationItems(
+        @Path("jobId") jobId: Long,
+        @Query("outcome") outcome: String? = null,
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 25
+    ): AdminPageDto<BulkExerciseGenerationItemDto>
+
+    @POST("api/v1/admin/exercises/bulk-generate/{jobId}/resume")
+    suspend fun resumeBulkExerciseGenerationJob(
+        @Path("jobId") jobId: Long
+    ): BulkExerciseGenerationJobDto
+
+    @GET("api/v1/admin/exercises/stats")
+    suspend fun getAdminExerciseStats(): AdminExerciseStatsDto
+
+    @PATCH("api/v1/admin/exercises/bulk-status")
+    suspend fun bulkUpdateAdminExerciseStatus(
+        @Body request: BulkUpdateExerciseStatusRequestDto
+    ): List<AdminExerciseDto>
 
     @GET("api/v1/admin/exercises/{exerciseId}")
     suspend fun getAdminExercise(@Path("exerciseId") exerciseId: Long): AdminExerciseDto
@@ -962,7 +1008,8 @@ interface CalisthenicsApi {
     // Dedicated Admin AI Agent Endpoints
     @POST("api/v1/admin/ai/chat")
     suspend fun sendAdminAiChat(
-        @Body request: AdminAiChatRequestDto
+        @Body request: AdminAiChatRequestDto,
+        @Header("Idempotency-Key") idempotencyKey: String? = null
     ): AdminAiChatResponseDto
 
     @POST("api/v1/admin/ai/confirmations/{token}")

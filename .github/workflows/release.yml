@@ -121,7 +121,7 @@ jobs:
           DIST_APK="${{ steps.package.outputs.apk_file }}"
 
           cat << 'EOF' > RELEASE_NOTES.md
-          ## Calisthenics AI - Phiên bản ${{ steps.package.outputs.tag_name }}
+          ## SKY - Phiên bản ${{ steps.package.outputs.tag_name }}
 
           ### 📦 Thông tin bản phát hành
           - **Tệp cài đặt:** `${{ steps.package.outputs.apk_file }}`
@@ -166,7 +166,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.package.outputs.tag_name }}
-          name: Calisthenics AI ${{ steps.package.outputs.tag_name }}
+          name: SKY ${{ steps.package.outputs.tag_name }}
           body_path: RELEASE_NOTES.md
           files: |
             ${{ steps.package.outputs.apk_file }}

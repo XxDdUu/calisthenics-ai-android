@@ -61,7 +61,7 @@ import com.calisthenics.ai.ui.theme.LocalAppColors
 import kotlinx.coroutines.delay
 
 /**
- * Rich, performant Jetpack Compose Markdown renderer for AI Assistant responses across Calisthenics AI.
+ * Rich, performant Jetpack Compose Markdown renderer for AI Assistant responses across SKY.
  * Handles headings, tables, syntax-highlighted code blocks with copy-to-clipboard, nested lists,
  * checklists, blockquotes, horizontal dividers, links, and text formatting.
  */

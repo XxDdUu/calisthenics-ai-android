@@ -1,6 +1,7 @@
 package com.calisthenics.ai.ui.chat.conversation
 
 import com.calisthenics.ai.R
+import com.calisthenics.ai.ui.components.aichat.MessageCopyButton
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -423,6 +424,13 @@ fun MessageBubbleItem(
                     modifier = Modifier.align(Alignment.End),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    MessageCopyButton(
+                        textToCopy = message.content,
+                        cleanMarkdown = false,
+                        tint = if (isFromMe && !isFailed) Ink.copy(alpha = 0.65f) else SecondaryText,
+                        copiedTint = if (isFromMe && !isFailed) Ink else Accent
+                    )
+                    Spacer(Modifier.width(4.dp))
                     Text(
                         text = ChatTimeUtils.formatMessageTime(message.createdAt),
                         style = MaterialTheme.typography.labelSmall,

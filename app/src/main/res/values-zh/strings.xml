@@ -50,7 +50,7 @@
     <string name="settings">设置</string>
     <string name="appearance">外观</string>
     <string name="today_workout">今日训练</string>
-    <string name="theme_description">自定义 Calisthenics AI 的主题和外观。</string>
+    <string name="theme_description">自定义 SKY 的主题和外观。</string>
     <string name="theme_light">浅色模式</string>
     <string name="theme_light_description">明亮简洁的背景与高对比度深色文字</string>
     <string name="theme_dark">深色模式</string>
@@ -310,8 +310,8 @@
     <string name="loc_biomechanical_analysis">生物力学分析</string>
     <string name="loc_body_metric_progression">身体指标变化</string>
     <string name="loc_body_metrics_tracking">身体指标追踪</string>
-    <string name="loc_calisthenics_ai">Calisthenics AI</string>
-    <string name="loc_calisthenics_ai_logo">Calisthenics AI 标志</string>
+    <string name="loc_calisthenics_ai">SKY</string>
+    <string name="loc_calisthenics_ai_logo">SKY 标志</string>
     <string name="loc_cancel_request">取消请求</string>
     <string name="loc_cannot_delete">无法删除</string>
     <string name="loc_category_required">类别 *</string>
@@ -708,7 +708,7 @@
     <string name="loc_failed_load_exercises">动作加载失败</string>
     <string name="loc_live_analysis_upper">实时分析</string>
     <string name="loc_camera_required_live">实时分析需要摄像头权限</string>
-    <string name="loc_calisthenics_engine">CALISTHENICS AI 引擎</string>
+    <string name="loc_calisthenics_engine">SKY AI 引擎</string>
     <string name="loc_reps_completed_upper">已完成次数</string>
     <string name="loc_hold_duration_upper">保持时长</string>
     <string name="loc_start">开始</string>

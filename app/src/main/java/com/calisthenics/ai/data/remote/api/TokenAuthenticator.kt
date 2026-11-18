@@ -168,14 +168,17 @@ open class TokenAuthenticator @Inject constructor(
                 .post(body)
                 .build()
 
-            val refreshResponse = refreshHttpClient.newCall(refreshRequest).execute()
-            if (refreshResponse.isSuccessful) {
-                val responseBody = refreshResponse.body?.string()
-                if (!responseBody.isNullOrBlank()) {
-                    gson.fromJson(responseBody, AuthResponseDto::class.java)
-                } else null
-            } else {
-                null
+            refreshHttpClient.newCall(refreshRequest).execute().use { refreshResponse ->
+                if (refreshResponse.isSuccessful) {
+                    val responseBody = refreshResponse.body?.string()
+                    if (!responseBody.isNullOrBlank()) {
+                        gson.fromJson(responseBody, AuthResponseDto::class.java)
+                    } else {
+                        null
+                    }
+                } else {
+                    null
+                }
             }
         } catch (e: IOException) {
             lastRefreshWasNetworkError = true

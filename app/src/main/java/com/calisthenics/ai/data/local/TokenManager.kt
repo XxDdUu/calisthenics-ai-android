@@ -85,7 +85,7 @@ open class TokenManager @Inject constructor(@ApplicationContext context: Context
         val resolvedEmail = email?.takeIf { it.isNotBlank() }
             ?: extractClaimFromToken(accessToken, "email")
             ?: preferences.getString(keyAccountEmail(resolvedUserId), null)
-            ?: if (resolvedUserId != NO_USER_ID) "user_$resolvedUserId@calisthenics.ai" else "user@calisthenics.ai"
+            ?: if (resolvedUserId != NO_USER_ID) "user_$resolvedUserId@sky.app" else "user@sky.app"
 
         val resolvedFullName = fullName?.takeIf { it.isNotBlank() }
             ?: extractClaimFromToken(accessToken, "fullName")
@@ -224,7 +224,7 @@ open class TokenManager @Inject constructor(@ApplicationContext context: Context
         for (idStr in accountIds) {
             val id = idStr.toLongOrNull() ?: continue
             val email = preferences.getString(keyAccountEmail(id), null)
-                ?: "user_$id@calisthenics.ai"
+                ?: "user_$id@sky.app"
             val fullName = preferences.getString(keyAccountFullName(id), null)
                 ?: email
             val avatarUrl = preferences.getString(keyAccountAvatarUrl(id), null)

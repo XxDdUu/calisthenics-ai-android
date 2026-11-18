@@ -244,6 +244,8 @@ class WorkoutAnalysisSummaryViewModelTest {
             aiSummaryStatus = "COMPLETED"
         )
         val holdShareText = vm.buildShareSummaryText(frontLeverHold)
+        assertTrue(holdShareText.contains("SKY Workout Summary"))
+        assertFalse(holdShareText.contains("Calisthenics AI"))
         assertTrue(holdShareText.contains("Peak Hold: 11.2s"))
         assertTrue(holdShareText.contains("Body Horizontal Alignment: 89% (174.0°)"))
         assertTrue(holdShareText.contains("Hip Drop: 2x [MEDIUM]"))

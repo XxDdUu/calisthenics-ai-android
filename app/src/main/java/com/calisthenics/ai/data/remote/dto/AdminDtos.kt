@@ -110,11 +110,23 @@ data class AdminExerciseDto(
     @SerializedName("videoUrl") val videoUrl: String?,
     @SerializedName("equipment") val equipment: String?,
     @SerializedName("active") val active: Boolean,
+    @SerializedName("status") val status: String? = null,
+    @SerializedName("origin") val origin: String? = null,
     @SerializedName("createdAt") val createdAt: String?,
     @SerializedName("planReferencesCount") val planReferencesCount: Long = 0L,
     @SerializedName("sessionReferencesCount") val sessionReferencesCount: Long = 0L,
     @SerializedName("canDelete") val canDelete: Boolean = true,
-    @SerializedName("mediaItems") val mediaItems: List<ExerciseMediaResponseDto> = emptyList()
+    @SerializedName("mediaItems") val mediaItems: List<ExerciseMediaResponseDto> = emptyList(),
+    @SerializedName("trainingType") val trainingType: String? = "CALISTHENICS",
+    @SerializedName("secondaryMuscles") val secondaryMuscles: String? = null,
+    @SerializedName("exerciseType") val exerciseType: String? = null,
+    @SerializedName("recommendedSets") val recommendedSets: Int? = null,
+    @SerializedName("recommendedReps") val recommendedReps: String? = null,
+    @SerializedName("recommendedRestSeconds") val recommendedRestSeconds: Int? = null,
+    @SerializedName("commonMistakes") val commonMistakes: String? = null,
+    @SerializedName("safetyConsiderations") val safetyConsiderations: String? = null,
+    @SerializedName("progressionNotes") val progressionNotes: String? = null,
+    @SerializedName("aliases") val aliases: String? = null
 )
 
 data class CreateAdminExerciseRequestDto(
@@ -129,7 +141,9 @@ data class CreateAdminExerciseRequestDto(
     @SerializedName("videoUrl") val videoUrl: String? = null,
     @SerializedName("equipment") val equipment: String? = null,
     @SerializedName("active") val active: Boolean = true,
-    @SerializedName("mediaItems") val mediaItems: List<ExerciseMediaItemRequestDto> = emptyList()
+    @SerializedName("mediaItems") val mediaItems: List<ExerciseMediaItemRequestDto> = emptyList(),
+    @SerializedName("status") val status: String? = null,
+    @SerializedName("origin") val origin: String? = null
 )
 
 data class UpdateAdminExerciseRequestDto(
@@ -145,7 +159,9 @@ data class UpdateAdminExerciseRequestDto(
     @SerializedName("equipment") val equipment: String? = null,
     @SerializedName("active") val active: Boolean? = null,
     @SerializedName("mediaItems") val mediaItems: List<ExerciseMediaItemRequestDto> = emptyList(),
-    @SerializedName("replaceMediaItems") val replaceMediaItems: Boolean = false
+    @SerializedName("replaceMediaItems") val replaceMediaItems: Boolean = false,
+    @SerializedName("status") val status: String? = null,
+    @SerializedName("origin") val origin: String? = null
 )
 
 data class ExerciseMediaItemRequestDto(
@@ -156,7 +172,21 @@ data class ExerciseMediaItemRequestDto(
 )
 
 data class UpdateExerciseStatusRequestDto(
-    @SerializedName("active") val active: Boolean
+    @SerializedName("active") val active: Boolean,
+    @SerializedName("status") val status: String? = if (active) "PUBLISHED" else "DRAFT"
+)
+
+data class BulkUpdateExerciseStatusRequestDto(
+    @SerializedName("exerciseIds") val exerciseIds: List<Long>,
+    @SerializedName("active") val active: Boolean,
+    @SerializedName("status") val status: String = if (active) "PUBLISHED" else "DRAFT"
+)
+
+data class AdminExerciseStatsDto(
+    @SerializedName("totalCount") val totalCount: Long = 0L,
+    @SerializedName("publishedCount") val publishedCount: Long = 0L,
+    @SerializedName("draftCount") val draftCount: Long = 0L,
+    @SerializedName("aiRecommendedCount") val aiRecommendedCount: Long = 0L
 )
 
 data class AdminExerciseDeleteResponseDto(
@@ -198,7 +228,8 @@ data class AdminAiChatRequestDto(
     @SerializedName("startDate") val startDate: String? = null,
     @SerializedName("endDate") val endDate: String? = null,
     @SerializedName("targetUserId") val targetUserId: Long? = null,
-    @SerializedName("includeEmail") val includeEmail: Boolean? = false
+    @SerializedName("includeEmail") val includeEmail: Boolean? = false,
+    @SerializedName("idempotencyKey") val idempotencyKey: String? = null
 )
 
 data class AdminAiChatResponseDto(
@@ -225,6 +256,8 @@ data class AdminAiChatResponseDto(
     @SerializedName("pendingConfirmation") val pendingConfirmation: AdminPendingConfirmationDto? = null,
     @SerializedName("updatedProUser") val updatedProUser: AdminUserDto? = null,
     @SerializedName("proCandidates") val proCandidates: List<AdminUserDto> = emptyList(),
+    @SerializedName("createdExercises") val createdExercises: List<AdminExerciseDto> = emptyList(),
+    @SerializedName("bulkGenerationJob") val bulkGenerationJob: BulkExerciseGenerationJobDto? = null,
     @SerializedName("missingDataNotes") val missingDataNotes: List<String> = emptyList(),
     @SerializedName("suggestedFollowUps") val suggestedFollowUps: List<String> = emptyList()
 )
@@ -978,4 +1011,58 @@ data class CreateAdminRecommendationRequestDto(
 data class ReviewAdminRecommendationRequestDto(
     @SerializedName("reviewNotes") val reviewNotes: String? = null,
     @SerializedName("publishExercise") val publishExercise: Boolean? = null
+)
+
+data class BulkExerciseGenerationRequestDto(
+    @SerializedName("prompt") val prompt: String? = null,
+    @SerializedName("quantity") val quantity: Int? = null,
+    @SerializedName("trainingType") val trainingType: String? = null,
+    @SerializedName("categories") val categories: List<String>? = null,
+    @SerializedName("focus") val focus: String? = null,
+    @SerializedName("batchSize") val batchSize: Int? = 20,
+    @SerializedName("conversationId") val conversationId: Long? = null,
+    @SerializedName("idempotencyKey") val idempotencyKey: String? = null
+)
+
+data class BulkExerciseGenerationJobDto(
+    @SerializedName("id") val id: Long,
+    @SerializedName("jobUid") val jobUid: String = "",
+    @SerializedName("conversationId") val conversationId: Long? = null,
+    @SerializedName("prompt") val prompt: String = "",
+    @SerializedName("trainingTypeFilter") val trainingTypeFilter: String? = null,
+    @SerializedName("categoriesFilter") val categoriesFilter: String? = null,
+    @SerializedName("requestedQuantity") val requestedQuantity: Int = 0,
+    @SerializedName("batchSize") val batchSize: Int = 20,
+    @SerializedName("generatedCount") val generatedCount: Int = 0,
+    @SerializedName("duplicateCount") val duplicateCount: Int = 0,
+    @SerializedName("savedCount") val savedCount: Int = 0,
+    @SerializedName("failedCount") val failedCount: Int = 0,
+    @SerializedName("processedBatches") val processedBatches: Int = 0,
+    @SerializedName("totalBatchesEstimated") val totalBatchesEstimated: Int = 1,
+    @SerializedName("progressPercent") val progressPercent: Int = 0,
+    @SerializedName("status") val status: String = "PENDING",
+    @SerializedName("errorMessage") val errorMessage: String? = null,
+    @SerializedName("summaryPosted") val summaryPosted: Boolean = false,
+    @SerializedName("canResume") val canResume: Boolean = false,
+    @SerializedName("statusMessage") val statusMessage: String = "",
+    @SerializedName("skippedDuplicateSamples") val skippedDuplicateSamples: List<String> = emptyList(),
+    @SerializedName("createdAt") val createdAt: String? = null,
+    @SerializedName("startedAt") val startedAt: String? = null,
+    @SerializedName("completedAt") val completedAt: String? = null,
+    @SerializedName("updatedAt") val updatedAt: String? = null
+)
+
+data class BulkExerciseGenerationItemDto(
+    @SerializedName("id") val id: Long,
+    @SerializedName("sequenceNumber") val sequenceNumber: Int? = null,
+    @SerializedName("exerciseId") val exerciseId: Long? = null,
+    @SerializedName("exerciseName") val exerciseName: String = "",
+    @SerializedName("exerciseCode") val exerciseCode: String? = null,
+    @SerializedName("trainingType") val trainingType: String? = null,
+    @SerializedName("category") val category: String? = null,
+    @SerializedName("difficulty") val difficulty: String? = null,
+    @SerializedName("outcome") val outcome: String = "",
+    @SerializedName("reason") val reason: String? = null,
+    @SerializedName("batchNumber") val batchNumber: Int = 0,
+    @SerializedName("createdAt") val createdAt: String? = null
 )

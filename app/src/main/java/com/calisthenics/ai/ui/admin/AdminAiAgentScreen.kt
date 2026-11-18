@@ -24,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.AssistChip
@@ -50,6 +51,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -66,9 +68,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.calisthenics.ai.domain.model.AdminAiConversationSummary
 import com.calisthenics.ai.domain.model.AdminAiMessage
 import com.calisthenics.ai.domain.model.AdminAiRecommendation
+import com.calisthenics.ai.domain.model.AdminPage
 import com.calisthenics.ai.domain.model.AdminPendingConfirmation
 import com.calisthenics.ai.domain.model.AdminPlatformOverview
 import com.calisthenics.ai.domain.model.AdminTrainingAnalytics
+import com.calisthenics.ai.domain.model.BulkExerciseGenerationItem
+import com.calisthenics.ai.domain.model.BulkExerciseGenerationJob
 import com.calisthenics.ai.domain.model.GettingStartedCampaignAnalytics
 import com.calisthenics.ai.domain.model.GettingStartedCampaignSummary
 import com.calisthenics.ai.domain.model.GettingStartedProgram
@@ -155,8 +160,14 @@ fun AdminAiAgentScreen(
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.weight(1f)
                     )
-                    TextButton(onClick = { viewModel.loadAdminAiWorkspace(state.aiAnalyticsRange) }) {
-                        Text("Retry")
+                    TextButton(onClick = {
+                        if (state.lastFailedAiPrompt != null) {
+                            viewModel.retryLastAiMessage()
+                        } else {
+                            viewModel.loadAdminAiWorkspace(state.aiAnalyticsRange)
+                        }
+                    }) {
+                        Text(if (state.lastFailedAiPrompt != null) "Retry Send" else "Retry")
                     }
                 }
             }
@@ -211,6 +222,7 @@ fun AdminAiAgentScreen(
                     messages = state.aiMessages,
                     suggestedPrompts = state.aiSuggestedFollowUps,
                     isSending = state.isSendingAiMessage,
+                    restoredDraftPrompt = state.restoredAiDraftPrompt,
                     executedTools = state.aiLastExecutedTools,
                     timeRangeUsed = state.aiLastTimeRangeUsed,
                     matchedUsers = state.aiMatchedChatUsers,
@@ -221,9 +233,25 @@ fun AdminAiAgentScreen(
                     campaignAnalytics = state.aiCampaignAnalytics,
                     pendingConfirmation = state.aiPendingConfirmation,
                     isResolvingConfirmation = state.isResolvingConfirmation,
+                    activeBulkJob = state.activeBulkJob,
+                    bulkJobItemsPage = state.bulkJobItemsPage,
+                    isLoadingBulkJobItems = state.isLoadingBulkJobItems,
+                    isStartingBulkJob = state.isStartingBulkJob,
+                    bulkJobOutcomeFilter = state.bulkJobOutcomeFilter,
                     onSelectConversation = viewModel::selectAdminAiConversation,
                     onNewConversation = { viewModel.createNewAdminAiConversation() },
-                    onSendMessage = viewModel::sendAdminAiMessage,
+                    onSendMessage = { prompt -> viewModel.sendAdminAiMessage(prompt) },
+                    onConsumeRestoredDraft = viewModel::consumeRestoredAiDraftPrompt,
+                    onStartBulkGeneration = { qty, type, cats, focus ->
+                        viewModel.startBulkExerciseGeneration(qty, type, cats, focus)
+                    },
+                    onLoadBulkJobItems = { jobId, outcome, page ->
+                        viewModel.loadBulkJobItems(jobId, outcome, page)
+                    },
+                    onResumeBulkJob = { jobId -> viewModel.resumeBulkGenerationJob(jobId) },
+                    onDismissBulkJobItems = viewModel::dismissBulkJobItems,
+                    onClearBulkJob = viewModel::clearActiveBulkJob,
+                    onOpenExercise = onOpenExercise,
                     onResolveConfirmation = viewModel::resolvePendingConfirmation,
                     onInspectUser = { userId -> viewModel.inspectGlobalUser(userId, includeEmail = false) }
                 )
@@ -316,6 +344,7 @@ private fun AdminAiChatTab(
     messages: List<AdminAiMessage>,
     suggestedPrompts: List<String>,
     isSending: Boolean,
+    restoredDraftPrompt: String? = null,
     executedTools: List<com.calisthenics.ai.domain.model.AdminToolExecution> = emptyList(),
     timeRangeUsed: com.calisthenics.ai.domain.model.AdminTimeRange? = null,
     matchedUsers: List<com.calisthenics.ai.domain.model.AdminGlobalUserSummary> = emptyList(),
@@ -326,13 +355,33 @@ private fun AdminAiChatTab(
     campaignAnalytics: GettingStartedCampaignAnalytics? = null,
     pendingConfirmation: AdminPendingConfirmation? = null,
     isResolvingConfirmation: Boolean = false,
+    activeBulkJob: BulkExerciseGenerationJob? = null,
+    bulkJobItemsPage: AdminPage<BulkExerciseGenerationItem>? = null,
+    isLoadingBulkJobItems: Boolean = false,
+    isStartingBulkJob: Boolean = false,
+    bulkJobOutcomeFilter: String? = "SAVED",
     onSelectConversation: (Long) -> Unit,
     onNewConversation: () -> Unit,
     onSendMessage: (String) -> Unit,
+    onConsumeRestoredDraft: () -> Unit = {},
+    onStartBulkGeneration: (Int, String, List<String>, String?) -> Unit = { _, _, _, _ -> },
+    onLoadBulkJobItems: (Long, String?, Int) -> Unit = { _, _, _ -> },
+    onResumeBulkJob: (Long) -> Unit = {},
+    onDismissBulkJobItems: () -> Unit = {},
+    onClearBulkJob: () -> Unit = {},
+    onOpenExercise: (Long) -> Unit = {},
     onResolveConfirmation: (Boolean) -> Unit = {},
     onInspectUser: (Long) -> Unit = {}
 ) {
     var inputText by rememberSaveable { mutableStateOf("") }
+    var showBulkConfigDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(restoredDraftPrompt) {
+        if (!restoredDraftPrompt.isNullOrBlank()) {
+            inputText = restoredDraftPrompt
+            onConsumeRestoredDraft()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -344,6 +393,11 @@ private fun AdminAiChatTab(
         ) {
             OutlinedButton(onClick = onNewConversation) {
                 Text("+ New Session")
+            }
+            OutlinedButton(onClick = { showBulkConfigDialog = true }) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Bulk Generate")
             }
             conversations.forEach { conv ->
                 FilterChip(
@@ -461,6 +515,15 @@ private fun AdminAiChatTab(
             AiStatusRow(statusText = "Analyzing platform data...")
         }
 
+        if (activeBulkJob != null) {
+            BulkExerciseGenerationStatusCard(
+                job = activeBulkJob,
+                onInspectItems = { outcome -> onLoadBulkJobItems(activeBulkJob.id, outcome, 0) },
+                onResume = { onResumeBulkJob(activeBulkJob.id) },
+                onDismiss = onClearBulkJob
+            )
+        }
+
         if (pendingConfirmation != null) {
             AdminPendingConfirmationCard(
                 confirmation = pendingConfirmation,
@@ -546,6 +609,34 @@ private fun AdminAiChatTab(
             },
             isGenerating = isSending,
             placeholder = "Ask Admin AI Agent..."
+        )
+    }
+
+    if (showBulkConfigDialog) {
+        BulkGenerationConfigDialog(
+            isSubmitting = isStartingBulkJob,
+            onDismiss = { showBulkConfigDialog = false },
+            onStart = { qty, type, cats, focus ->
+                showBulkConfigDialog = false
+                onStartBulkGeneration(qty, type, cats, focus)
+            }
+        )
+    }
+
+    val currentItemsPage = bulkJobItemsPage
+    if (activeBulkJob != null && currentItemsPage != null) {
+        BulkGenerationItemsDialog(
+            job = activeBulkJob,
+            itemsPage = currentItemsPage,
+            isLoading = isLoadingBulkJobItems,
+            outcomeFilter = bulkJobOutcomeFilter,
+            onSelectOutcome = { outcome -> onLoadBulkJobItems(activeBulkJob.id, outcome, 0) },
+            onPageChange = { nextPage -> onLoadBulkJobItems(activeBulkJob.id, bulkJobOutcomeFilter, nextPage) },
+            onOpenExercise = { id ->
+                onDismissBulkJobItems()
+                onOpenExercise(id)
+            },
+            onDismiss = onDismissBulkJobItems
         )
     }
 }

@@ -50,7 +50,7 @@
     <string name="settings">Settings</string>
     <string name="appearance">Appearance</string>
     <string name="today_workout">Today Workout</string>
-    <string name="theme_description">Customize the theme and visual appearance of Calisthenics AI.</string>
+    <string name="theme_description">Customize the theme and visual appearance of SKY.</string>
     <string name="theme_light">Light Mode</string>
     <string name="theme_light_description">Clean bright background with high contrast dark typography</string>
     <string name="theme_dark">Dark Mode</string>
@@ -332,8 +332,8 @@
     <string name="loc_biomechanical_analysis">Biomechanical Analysis</string>
     <string name="loc_body_metric_progression">Body Metric Progression</string>
     <string name="loc_body_metrics_tracking">Body Metrics Tracking</string>
-    <string name="loc_calisthenics_ai">Calisthenics AI</string>
-    <string name="loc_calisthenics_ai_logo">Calisthenics AI Logo</string>
+    <string name="loc_calisthenics_ai">SKY</string>
+    <string name="loc_calisthenics_ai_logo">SKY Logo</string>
     <string name="loc_cancel_request">Cancel Request</string>
     <string name="loc_cannot_delete">Cannot delete</string>
     <string name="loc_category_required">Category *</string>
@@ -730,7 +730,7 @@
     <string name="loc_failed_load_exercises">Failed to load exercises</string>
     <string name="loc_live_analysis_upper">LIVE ANALYSIS</string>
     <string name="loc_camera_required_live">Camera access is required for live analysis</string>
-    <string name="loc_calisthenics_engine">CALISTHENICS AI ENGINE</string>
+    <string name="loc_calisthenics_engine">SKY AI ENGINE</string>
     <string name="loc_reps_completed_upper">REPS COMPLETED</string>
     <string name="loc_hold_duration_upper">HOLD DURATION</string>
     <string name="loc_start">Start</string>

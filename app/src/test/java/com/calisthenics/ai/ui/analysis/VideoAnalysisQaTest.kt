@@ -942,7 +942,7 @@ class VideoAnalysisQaTest {
     fun qa_userProfile_adminRole_mapsToAdminWithAllProEntitlements() {
         val dto = com.calisthenics.ai.data.remote.dto.UserProfileResponseDto(
             id = 1L,
-            email = "admin@calisthenics.ai",
+            email = "admin@sky.app",
             fullName = "Super Admin",
             experienceLevel = "ADVANCED",
             role = "ROLE_ADMIN",

@@ -1,7 +1,7 @@
 package com.calisthenics.ai.ui.components.aichat
 
 /**
- * Standardized AI state model across all AI chat interfaces in Calisthenics AI.
+ * Standardized AI state model across all AI chat interfaces in SKY.
  * Follows the AI Workout Planner lifecycle and interaction semantics.
  */
 sealed interface AIChatState {

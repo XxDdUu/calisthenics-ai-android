@@ -115,7 +115,35 @@ data class AdminExercise(
     val planReferencesCount: Long = 0L,
     val sessionReferencesCount: Long = 0L,
     val canDelete: Boolean = true,
-    val mediaItems: List<ExerciseMedia> = emptyList()
+    val mediaItems: List<ExerciseMedia> = emptyList(),
+    val status: String = if (active) "PUBLISHED" else "DRAFT",
+    val origin: String = "MANUAL",
+    val trainingType: String = "CALISTHENICS",
+    val secondaryMuscles: String? = null,
+    val exerciseType: String? = null,
+    val recommendedSets: Int? = null,
+    val recommendedReps: String? = null,
+    val recommendedRestSeconds: Int? = null,
+    val commonMistakes: String? = null,
+    val safetyConsiderations: String? = null,
+    val progressionNotes: String? = null,
+    val aliases: String? = null
+) {
+    val isDraft: Boolean
+        get() = status.equals("DRAFT", ignoreCase = true) || !active
+
+    val isPublished: Boolean
+        get() = status.equals("PUBLISHED", ignoreCase = true) && active
+
+    val isAiRecommended: Boolean
+        get() = origin.equals("AI_RECOMMENDED", ignoreCase = true)
+}
+
+data class AdminExerciseStats(
+    val totalCount: Long = 0L,
+    val publishedCount: Long = 0L,
+    val draftCount: Long = 0L,
+    val aiRecommendedCount: Long = 0L
 )
 
 data class AdminExerciseDeleteResult(
@@ -170,7 +198,9 @@ data class AdminAiChatResponse(
     val pendingConfirmation: AdminPendingConfirmation? = null,
     val missingDataNotes: List<String> = emptyList(),
     val updatedProUser: AdminUser? = null,
-    val proCandidates: List<AdminUser> = emptyList()
+    val proCandidates: List<AdminUser> = emptyList(),
+    val createdExercises: List<AdminExercise> = emptyList(),
+    val bulkGenerationJob: BulkExerciseGenerationJob? = null
 )
 
 data class GettingStartedProgramPreview(
@@ -726,4 +756,47 @@ data class OperationalRecommendationDetails(
     val suggestedAction: String?,
     val expectedBenefit: String?,
     val affectedArea: String?
+)
+
+data class BulkExerciseGenerationJob(
+    val id: Long,
+    val jobUid: String,
+    val conversationId: Long?,
+    val prompt: String,
+    val trainingTypeFilter: String?,
+    val categoriesFilter: String?,
+    val requestedQuantity: Int,
+    val batchSize: Int,
+    val generatedCount: Int,
+    val duplicateCount: Int,
+    val savedCount: Int,
+    val failedCount: Int,
+    val processedBatches: Int,
+    val totalBatchesEstimated: Int,
+    val progressPercent: Int,
+    val status: String,
+    val errorMessage: String?,
+    val summaryPosted: Boolean,
+    val canResume: Boolean,
+    val statusMessage: String,
+    val skippedDuplicateSamples: List<String> = emptyList(),
+    val createdAt: String? = null,
+    val startedAt: String? = null,
+    val completedAt: String? = null,
+    val updatedAt: String? = null
+)
+
+data class BulkExerciseGenerationItem(
+    val id: Long,
+    val sequenceNumber: Int?,
+    val exerciseId: Long?,
+    val exerciseName: String,
+    val exerciseCode: String?,
+    val trainingType: String?,
+    val category: String?,
+    val difficulty: String?,
+    val outcome: String,
+    val reason: String?,
+    val batchNumber: Int,
+    val createdAt: String? = null
 )
